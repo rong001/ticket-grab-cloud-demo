@@ -536,5 +536,7 @@
       "flight": "partial — tick/cancel machinery pass; OpenSky live query FAIL (HTTP 404 → fixture)"
     },
     "overallProduct": "待独立验收"
-  }
+  },
+  "publicSha": "02e27eada0a08bb8fbade477c703f084c0fc0726",
+  "publicCommitUrl": "https://github.com/rong001/ticket-grab-cloud-demo/commit/02e27eada0a08bb8fbade477c703f084c0fc0726"
 }
