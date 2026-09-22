@@ -815,7 +815,10 @@ export function extractIntakePatch(text: string, current: IntakeFields, now = ne
   if (ch === "show") {
     const labeled = parseLabeledShowFields(text, now);
     for (const [k, v] of Object.entries(labeled)) {
-      if (v !== undefined && (current as Record<string, unknown>)[k] == null) {
+      if (v === undefined) continue;
+      const cur = (current as Record<string, unknown>)[k];
+      // Explicit labeled preference overrides prior「不限」; other fields stay fill-once.
+      if (cur == null || (k === "tier" && cur === "不限")) {
         (patch as Record<string, unknown>)[k] = v;
       }
     }
@@ -870,13 +873,18 @@ export function extractIntakePatch(text: string, current: IntakeFields, now = ne
   const date = normalizeDateToken(text, now);
   if (date && !current.date) patch.date = date;
 
-  const tw = extractTimeWindow(text);
+  // Show channel has no travel timeWindow; never fill it from bare「不限」there.
+  const tw = ch !== "show" ? extractTimeWindow(text) : undefined;
   if (tw && !current.timeWindow) patch.timeWindow = tw;
 
-  // 「时间不限」/「不限」near 时间 → timeWindow only; never clobber seat/cabin/tier.
+  // Unlimited scoping (P1e):
+  // - 「时间不限」/ bare「不限」→ timeWindow ONLY (never seat/cabin/tier).
+  // - 「席别不限」/「舱位不限」/「票档不限」→ that field only.
+  // Short-answer mode (applyShortAnswer) still allows bare「不限」for the *asked* field.
   const timeScopedUnlimited = /时间\s*不限|不限\s*时间|时段\s*不限|时间段\s*不限/.test(text);
-  const seatScopedUnlimited = /席别\s*不限|座位\s*不限|不限\s*席别/.test(text);
+  const seatScopedUnlimited = /席别\s*不限|座位\s*不限|不限\s*(?:席别|座位)/.test(text);
   const cabinScopedUnlimited = /舱位\s*不限|不限\s*舱位/.test(text);
+  const tierScopedUnlimited = /票档\s*不限|票价档\s*不限|不限\s*(?:票档|票价档)/.test(text);
   if (timeScopedUnlimited && ch !== "show" && !current.timeWindow) patch.timeWindow = "不限";
   else if (
     /不限|任意|都行/.test(text) &&
@@ -885,31 +893,32 @@ export function extractIntakePatch(text: string, current: IntakeFields, now = ne
     !patch.timeWindow &&
     !seatScopedUnlimited &&
     !cabinScopedUnlimited &&
+    !tierScopedUnlimited &&
     !/(?:席别|座位|舱位|票档)\s*不限|不限\s*(?:席别|座位|舱位|票档)/.test(text)
   ) {
+    // Bare / free-form「不限」without seat/cabin/tier scope → timeWindow only.
     patch.timeWindow = "不限";
   }
 
+  // Explicit seat/cabin/tier ALWAYS override prior values (including「不限」).
   const seat = extractSeat(text);
-  if (seat && !current.seatClass) patch.seatClass = seat;
+  if (seat) patch.seatClass = seat;
   else if (
     ch === "train" &&
-    !current.seatClass &&
-    !patch.seatClass &&
-    (seatScopedUnlimited ||
-      (/不限|任意|都行/.test(text) && !timeScopedUnlimited && !/时间/.test(text)))
+    seatScopedUnlimited &&
+    (!current.seatClass || current.seatClass === "不限") &&
+    !patch.seatClass
   ) {
     patch.seatClass = "不限";
   }
 
   const cabin = extractCabin(text);
-  if (cabin && !current.cabin) patch.cabin = cabin;
+  if (cabin) patch.cabin = cabin;
   else if (
     ch === "flight" &&
-    !current.cabin &&
-    !patch.cabin &&
-    (cabinScopedUnlimited ||
-      (/不限|任意|都行/.test(text) && !timeScopedUnlimited && !/时间/.test(text)))
+    cabinScopedUnlimited &&
+    (!current.cabin || current.cabin === "不限") &&
+    !patch.cabin
   ) {
     patch.cabin = "不限";
   }
@@ -920,7 +929,7 @@ export function extractIntakePatch(text: string, current: IntakeFields, now = ne
     // Never use 票档\S+ — that swallows 人数/盯票开始 after fullwidth colon.
     const wholeIsDate =
       /^\d{4}[-/.年]\d{1,2}([-/.月]\d{1,2})?日?$/.test(text.trim()) || /^20\d{2}$/.test(text.trim());
-    if (!wholeIsDate && !current.tier && !patch.tier) {
+    if (!wholeIsDate) {
       const tierLabeled = text.match(/票(?:档|价档)\s*[:：]\s*([^\s;；,，]{1,20})/);
       const tierM =
         tierLabeled ||
@@ -932,16 +941,16 @@ export function extractIntakePatch(text: string, current: IntakeFields, now = ne
           !/^\d{4}([-/.年]\d{1,2})?$/.test(cand) &&
           !isPollutedShowValue(cand, "tier")
         ) {
+          // Explicit tier overrides prior「不限」or empty.
           patch.tier = cand.replace(/\s+/g, "");
         }
       }
     }
     if (
-      /不限|任意|都行/.test(text) &&
-      !current.tier &&
+      tierScopedUnlimited &&
       !patch.tier &&
-      !wholeIsDate &&
-      !/时间\s*不限|不限\s*时间/.test(text)
+      (!current.tier || current.tier === "不限") &&
+      !wholeIsDate
     ) {
       patch.tier = "不限";
     }
@@ -1190,11 +1199,14 @@ export function processTurn(
 } {
   const asking = nextMissingField(session.fields);
   let patch = extractIntakePatch(userMessage, session.fields, now);
-  // Short answers fill only fields extract did not already set (avoid clobbering "A到B")
+  // Short answers: fill gaps extract missed. For the *currently asked* field, short
+  // answer always wins so bare「不限」only binds that field and later explicit
+  // 经济舱/二等座/内场680 overrides stale「不限」from extract/history merge.
   if (asking) {
     const short = applyShortAnswer(asking, userMessage, now, session.fields.channel ?? patch.channel);
     for (const [k, v] of Object.entries(short)) {
-      if (patch[k as keyof IntakeFields] === undefined) {
+      const key = k as keyof IntakeFields;
+      if (key === asking || patch[key] === undefined) {
         (patch as Record<string, unknown>)[k] = v;
       }
     }

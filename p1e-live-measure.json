@@ -1,0 +1,616 @@
+{
+  "base": "https://159.75.71.192:18444/api",
+  "at": "2026-09-22T05:51:35.159Z",
+  "turns": [
+    {
+      "label": "flight_7step",
+      "sessionId": "eb518cea-6a43-4048-883b-b1e86f079e3d",
+      "steps": [
+        {
+          "step": 1,
+          "message": "机票",
+          "channel": "flight",
+          "missing": "from",
+          "readyForConfirm": false
+        },
+        {
+          "step": 2,
+          "message": "SZX到PVG",
+          "channel": "flight",
+          "from": "深圳宝安 SZX",
+          "to": "上海浦东 PVG",
+          "missing": "date",
+          "readyForConfirm": false
+        },
+        {
+          "step": 3,
+          "message": "2026-12-10",
+          "channel": "flight",
+          "from": "深圳宝安 SZX",
+          "to": "上海浦东 PVG",
+          "date": "2026-12-10",
+          "missing": "timeWindow",
+          "readyForConfirm": false
+        },
+        {
+          "step": 4,
+          "message": "不限",
+          "channel": "flight",
+          "from": "深圳宝安 SZX",
+          "to": "上海浦东 PVG",
+          "date": "2026-12-10",
+          "timeWindow": "不限",
+          "missing": "cabin",
+          "readyForConfirm": false
+        },
+        {
+          "step": 5,
+          "message": "经济舱",
+          "channel": "flight",
+          "from": "深圳宝安 SZX",
+          "to": "上海浦东 PVG",
+          "date": "2026-12-10",
+          "timeWindow": "不限",
+          "cabin": "经济舱",
+          "missing": "passengers",
+          "readyForConfirm": false
+        },
+        {
+          "step": 6,
+          "message": "1人",
+          "channel": "flight",
+          "from": "深圳宝安 SZX",
+          "to": "上海浦东 PVG",
+          "date": "2026-12-10",
+          "timeWindow": "不限",
+          "cabin": "经济舱",
+          "passengers": 1,
+          "missing": "grabStartAt",
+          "readyForConfirm": false
+        },
+        {
+          "step": 7,
+          "message": "2026-11-20 09:00",
+          "channel": "flight",
+          "from": "深圳宝安 SZX",
+          "to": "上海浦东 PVG",
+          "date": "2026-12-10",
+          "timeWindow": "不限",
+          "cabin": "经济舱",
+          "passengers": 1,
+          "grabStartAt": "2026-11-20T01:00:00.000Z",
+          "missing": null,
+          "readyForConfirm": true,
+          "confirmCabin": "经济舱",
+          "confirmTw": "不限"
+        }
+      ]
+    },
+    {
+      "label": "cabin_correction",
+      "sessionId": "810642e1-0c7e-4abd-8002-593a7ce7288b",
+      "steps": [
+        {
+          "channel": "flight",
+          "from": "深圳宝安 SZX",
+          "to": "上海浦东 PVG",
+          "date": "2026-12-10",
+          "timeWindow": "08:00-12:00",
+          "cabin": "不限",
+          "missing": "passengers",
+          "readyForConfirm": false
+        },
+        {
+          "channel": "flight",
+          "from": "深圳宝安 SZX",
+          "to": "上海浦东 PVG",
+          "date": "2026-12-10",
+          "timeWindow": "08:00-12:00",
+          "cabin": "经济舱",
+          "missing": "passengers",
+          "readyForConfirm": false
+        }
+      ]
+    },
+    {
+      "label": "train_seat_override",
+      "sessionId": "5f57f158-db2f-4908-aee6-03288e55d872",
+      "steps": [
+        {
+          "step": 1,
+          "message": "火车",
+          "channel": "train",
+          "missing": "from",
+          "readyForConfirm": false
+        },
+        {
+          "step": 2,
+          "message": "韶关东到虎门",
+          "channel": "train",
+          "from": "韶关东",
+          "to": "虎门",
+          "missing": "date",
+          "readyForConfirm": false
+        },
+        {
+          "step": 3,
+          "message": "2026-12-15",
+          "channel": "train",
+          "from": "韶关东",
+          "to": "虎门",
+          "date": "2026-12-15",
+          "missing": "timeWindow",
+          "readyForConfirm": false
+        },
+        {
+          "step": 4,
+          "message": "不限",
+          "channel": "train",
+          "from": "韶关东",
+          "to": "虎门",
+          "date": "2026-12-15",
+          "timeWindow": "不限",
+          "missing": "seatClass",
+          "readyForConfirm": false
+        },
+        {
+          "step": 5,
+          "message": "二等座",
+          "channel": "train",
+          "from": "韶关东",
+          "to": "虎门",
+          "date": "2026-12-15",
+          "timeWindow": "不限",
+          "seatClass": "二等座",
+          "missing": "passengers",
+          "readyForConfirm": false
+        },
+        {
+          "step": 6,
+          "message": "1人",
+          "channel": "train",
+          "from": "韶关东",
+          "to": "虎门",
+          "date": "2026-12-15",
+          "timeWindow": "不限",
+          "seatClass": "二等座",
+          "passengers": 1,
+          "missing": "grabStartAt",
+          "readyForConfirm": false
+        },
+        {
+          "step": 7,
+          "message": "2026-11-20 09:00",
+          "channel": "train",
+          "from": "韶关东",
+          "to": "虎门",
+          "date": "2026-12-15",
+          "timeWindow": "不限",
+          "seatClass": "二等座",
+          "passengers": 1,
+          "grabStartAt": "2026-11-20T01:00:00.000Z",
+          "missing": null,
+          "readyForConfirm": true,
+          "confirmSeat": "二等座",
+          "confirmTw": "不限"
+        }
+      ]
+    },
+    {
+      "label": "show_tier_override",
+      "sessionId": "5c48b6ac-b936-43db-90c4-38345c3f3a34",
+      "steps": [
+        {
+          "step": 1,
+          "message": "演出",
+          "channel": "show",
+          "missing": "eventName",
+          "readyForConfirm": false
+        },
+        {
+          "step": 2,
+          "message": "周杰伦演唱会",
+          "channel": "show",
+          "eventName": "周杰伦演唱会",
+          "missing": "venue",
+          "readyForConfirm": false
+        },
+        {
+          "step": 3,
+          "message": "梅赛德斯-奔驰文化中心",
+          "channel": "show",
+          "eventName": "周杰伦演唱会",
+          "venue": "梅赛德斯-奔驰文化中心",
+          "missing": "date",
+          "readyForConfirm": false
+        },
+        {
+          "step": 4,
+          "message": "2026-12-31",
+          "channel": "show",
+          "date": "2026-12-31",
+          "eventName": "周杰伦演唱会",
+          "venue": "梅赛德斯-奔驰文化中心",
+          "missing": "tier",
+          "readyForConfirm": false
+        },
+        {
+          "step": 5,
+          "message": "不限",
+          "channel": "show",
+          "date": "2026-12-31",
+          "tier": "不限",
+          "eventName": "周杰伦演唱会",
+          "venue": "梅赛德斯-奔驰文化中心",
+          "missing": "passengers",
+          "readyForConfirm": false
+        },
+        {
+          "step": 6,
+          "message": "内场680",
+          "channel": "show",
+          "date": "2026-12-31",
+          "tier": "内场680",
+          "eventName": "周杰伦演唱会",
+          "venue": "梅赛德斯-奔驰文化中心",
+          "missing": "passengers",
+          "readyForConfirm": false
+        }
+      ]
+    },
+    {
+      "label": "negative_cabin_not_unlimited",
+      "sessionId": "a1e4dd17-9e14-48b3-bc75-f99d33fd973b",
+      "steps": [
+        {
+          "step": 1,
+          "message": "机票",
+          "channel": "flight",
+          "missing": "from",
+          "readyForConfirm": false
+        },
+        {
+          "step": 2,
+          "message": "SZX到PVG",
+          "channel": "flight",
+          "from": "深圳宝安 SZX",
+          "to": "上海浦东 PVG",
+          "missing": "date",
+          "readyForConfirm": false
+        },
+        {
+          "step": 3,
+          "message": "2026-12-10",
+          "channel": "flight",
+          "from": "深圳宝安 SZX",
+          "to": "上海浦东 PVG",
+          "date": "2026-12-10",
+          "missing": "timeWindow",
+          "readyForConfirm": false
+        },
+        {
+          "step": 4,
+          "message": "不限",
+          "channel": "flight",
+          "from": "深圳宝安 SZX",
+          "to": "上海浦东 PVG",
+          "date": "2026-12-10",
+          "timeWindow": "不限",
+          "missing": "cabin",
+          "readyForConfirm": false
+        },
+        {
+          "step": 5,
+          "message": "经济舱",
+          "channel": "flight",
+          "from": "深圳宝安 SZX",
+          "to": "上海浦东 PVG",
+          "date": "2026-12-10",
+          "timeWindow": "不限",
+          "cabin": "经济舱",
+          "missing": "passengers",
+          "readyForConfirm": false
+        },
+        {
+          "step": 6,
+          "message": "1人",
+          "channel": "flight",
+          "from": "深圳宝安 SZX",
+          "to": "上海浦东 PVG",
+          "date": "2026-12-10",
+          "timeWindow": "不限",
+          "cabin": "经济舱",
+          "passengers": 1,
+          "missing": "grabStartAt",
+          "readyForConfirm": false
+        },
+        {
+          "step": 7,
+          "message": "2026-11-20 09:00",
+          "channel": "flight",
+          "from": "深圳宝安 SZX",
+          "to": "上海浦东 PVG",
+          "date": "2026-12-10",
+          "timeWindow": "不限",
+          "cabin": "经济舱",
+          "passengers": 1,
+          "grabStartAt": "2026-11-20T01:00:00.000Z",
+          "missing": null,
+          "readyForConfirm": true,
+          "confirmCabin": "经济舱",
+          "confirmTw": "不限"
+        }
+      ]
+    }
+  ],
+  "regressions": {
+    "flight_7step": {
+      "ok4": true,
+      "ok5": true,
+      "okFinal": true,
+      "final": {
+        "channel": "flight",
+        "from": "深圳宝安 SZX",
+        "to": "上海浦东 PVG",
+        "date": "2026-12-10",
+        "timeWindow": "不限",
+        "cabin": "经济舱",
+        "passengers": 1,
+        "grabStartAt": "2026-11-20T01:00:00.000Z",
+        "missing": null,
+        "readyForConfirm": true,
+        "confirmCabin": "经济舱",
+        "confirmTw": "不限"
+      }
+    },
+    "cabin_correction": {
+      "afterUnlimited": {
+        "channel": "flight",
+        "from": "深圳宝安 SZX",
+        "to": "上海浦东 PVG",
+        "date": "2026-12-10",
+        "timeWindow": "08:00-12:00",
+        "cabin": "不限",
+        "missing": "passengers",
+        "readyForConfirm": false
+      },
+      "afterOverride": {
+        "channel": "flight",
+        "from": "深圳宝安 SZX",
+        "to": "上海浦东 PVG",
+        "date": "2026-12-10",
+        "timeWindow": "08:00-12:00",
+        "cabin": "经济舱",
+        "missing": "passengers",
+        "readyForConfirm": false
+      }
+    },
+    "train_seat_override": {
+      "ok": true,
+      "final": {
+        "channel": "train",
+        "from": "韶关东",
+        "to": "虎门",
+        "date": "2026-12-15",
+        "timeWindow": "不限",
+        "seatClass": "二等座",
+        "passengers": 1,
+        "grabStartAt": "2026-11-20T01:00:00.000Z",
+        "missing": null,
+        "readyForConfirm": true,
+        "confirmSeat": "二等座",
+        "confirmTw": "不限"
+      },
+      "s4": {
+        "step": 4,
+        "message": "不限",
+        "channel": "train",
+        "from": "韶关东",
+        "to": "虎门",
+        "date": "2026-12-15",
+        "timeWindow": "不限",
+        "missing": "seatClass",
+        "readyForConfirm": false
+      },
+      "s5": {
+        "step": 5,
+        "message": "二等座",
+        "channel": "train",
+        "from": "韶关东",
+        "to": "虎门",
+        "date": "2026-12-15",
+        "timeWindow": "不限",
+        "seatClass": "二等座",
+        "missing": "passengers",
+        "readyForConfirm": false
+      }
+    },
+    "show_tier_override": {
+      "ok": true,
+      "s5": {
+        "step": 5,
+        "message": "不限",
+        "channel": "show",
+        "date": "2026-12-31",
+        "tier": "不限",
+        "eventName": "周杰伦演唱会",
+        "venue": "梅赛德斯-奔驰文化中心",
+        "missing": "passengers",
+        "readyForConfirm": false
+      },
+      "s6": {
+        "step": 6,
+        "message": "内场680",
+        "channel": "show",
+        "date": "2026-12-31",
+        "tier": "内场680",
+        "eventName": "周杰伦演唱会",
+        "venue": "梅赛德斯-奔驰文化中心",
+        "missing": "passengers",
+        "readyForConfirm": false
+      }
+    },
+    "negative_cabin": {
+      "ok": true,
+      "cabinLine": "经济舱",
+      "cabin": "经济舱"
+    },
+    "p1d_show": {
+      "channel": "show",
+      "date": "2026-12-31",
+      "tier": "内场680",
+      "passengers": 2,
+      "grabStartAt": "2026-11-20T01:00:00.000Z",
+      "eventName": "周杰伦演唱会",
+      "venue": "梅赛德斯-奔驰文化中心",
+      "missing": null,
+      "readyForConfirm": true,
+      "confirmTier": "内场680"
+    }
+  },
+  "e2e": {
+    "request": {
+      "status": 200,
+      "cabin": "经济舱",
+      "fields": {
+        "to": "上海浦东 PVG",
+        "date": "2026-12-10",
+        "from": "深圳宝安 SZX",
+        "cabin": "经济舱",
+        "passengers": 1
+      },
+      "watchJobs": [
+        {
+          "id": "cmuc9b3d8000814bgcuh27f0p",
+          "status": "queued"
+        }
+      ]
+    },
+    "grabsList": {
+      "count": 1,
+      "hit": {
+        "id": "cmuc9b3d8000814bgcuh27f0p",
+        "requestId": "cmuc9b3d4000614bgqvnphcwe",
+        "status": "queued",
+        "statusReason": "Created from conversational intake confirmation",
+        "statusChangedAt": "2026-09-22T05:51:48.427Z",
+        "intervalMinutes": 5,
+        "startsAt": "2026-11-20T01:00:00.000Z",
+        "endsAt": null,
+        "autoOrder": false,
+        "preferences": {
+          "notify": true
+        },
+        "lastRunAt": null,
+        "nextRunAt": "2026-11-20T01:00:00.000Z",
+        "bullJobId": "repeat:843eacb9ea96d5644e3f0d3ba29e076b:1790056500000",
+        "createdAt": "2026-09-22T05:51:48.428Z",
+        "updatedAt": "2026-09-22T05:51:48.442Z",
+        "request": {
+          "id": "cmuc9b3d4000614bgqvnphcwe",
+          "channel": "flight",
+          "fields": {
+            "to": "上海浦东 PVG",
+            "date": "2026-12-10",
+            "from": "深圳宝安 SZX",
+            "cabin": "经济舱",
+            "passengers": 1
+          },
+          "notifyOnly": true,
+          "createdAt": "2026-09-22T05:51:48.425Z"
+        }
+      }
+    },
+    "confirm": {
+      "status": 201,
+      "requestId": "cmuc9b3d4000614bgqvnphcwe",
+      "jobId": "cmuc9b3d8000814bgcuh27f0p",
+      "confCabin": "经济舱",
+      "storedCabin": "经济舱"
+    },
+    "cancel": {
+      "status": 200,
+      "st": "cancelled",
+      "data": {
+        "id": "cmuc9b3d8000814bgcuh27f0p",
+        "requestId": "cmuc9b3d4000614bgqvnphcwe",
+        "status": "cancelled",
+        "intervalMinutes": 5,
+        "startsAt": "2026-11-20T01:00:00.000Z",
+        "endsAt": null,
+        "autoOrder": false,
+        "preferences": {
+          "notify": true
+        },
+        "statusReason": "Cancelled by user",
+        "statusChangedAt": "2026-09-22T05:51:49.146Z",
+        "lastRunAt": null,
+        "nextRunAt": "2026-11-20T01:00:00.000Z",
+        "bullJobId": "repeat:843eacb9ea96d5644e3f0d3ba29e076b:1790056500000",
+        "createdAt": "2026-09-22T05:51:48.428Z",
+        "updatedAt": "2026-09-22T05:51:49.147Z"
+      }
+    }
+  },
+  "summary": {
+    "pass": 11,
+    "fail": 0,
+    "results": [
+      {
+        "name": "flight_7step",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "cabin_correction",
+        "ok": true,
+        "detail": "before=不限 after=经济舱"
+      },
+      {
+        "name": "train_seat_override",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "show_tier_override",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "negative_cabin_not_unlimited",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "e2e_auth",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "e2e_ready",
+        "ok": true,
+        "detail": "cabin=经济舱"
+      },
+      {
+        "name": "e2e_confirm",
+        "ok": true,
+        "detail": "status=201 req=cmuc9b3d4000614bgqvnphcwe"
+      },
+      {
+        "name": "e2e_persist_cabin",
+        "ok": true,
+        "detail": "confCabin=经济舱 stored=经济舱"
+      },
+      {
+        "name": "e2e_cancel",
+        "ok": true,
+        "detail": "status=200 st=cancelled"
+      },
+      {
+        "name": "p1d_regression_show",
+        "ok": true,
+        "detail": ""
+      }
+    ]
+  }
+}

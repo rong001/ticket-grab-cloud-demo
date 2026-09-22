@@ -392,11 +392,16 @@ describe("flight multi-turn + airport disambiguation", () => {
     assert.ok(r.session.fields.to?.includes("PVG"));
     r = processTurn(r.session, "2026-12-01", fixedNow);
     r = processTurn(r.session, "不限", fixedNow);
+    assert.equal(r.session.fields.timeWindow, "不限");
+    assert.equal(r.session.fields.cabin, undefined);
+    assert.equal(r.missing, "cabin");
     r = processTurn(r.session, "经济舱", fixedNow);
+    assert.equal(r.session.fields.cabin, "经济舱");
     r = processTurn(r.session, "1人", fixedNow);
     r = processTurn(r.session, "2026-11-01 09:00", fixedNow);
     assert.equal(r.readyForConfirm, true);
-    assert.ok(r.confirmation);
+    assert.equal(r.session.fields.cabin, "经济舱");
+    assert.equal(r.confirmation!.lines.find((l) => l.label === "舱位")?.value, "经济舱");
     assert.ok(/航司|OTA|官方/.test(r.confirmation!.capabilityNote));
   });
 
@@ -641,5 +646,136 @@ describe("P1d show labeled/natural field boundaries (no swallow)", () => {
     assert.equal(r.readyForConfirm, true);
     assert.equal(r.session.fields.grabStartAt, "2026-11-20T01:00:00.000Z");
     assert.equal(r.confirmation!.lines.find((l) => l.label === "演出")?.value, "周杰伦嘉年华演唱会");
+  });
+});
+
+describe("P1e multi-turn 不限 scopes to asked field + explicit override", () => {
+  const fixedNow = new Date("2026-09-22T04:00:00.000Z");
+
+  it("flight exact 7-step: 不限 only timeWindow; 经济舱 overrides; confirm cabin 经济舱", () => {
+    let r = processTurn(createEmptySession(), "机票", fixedNow);
+    assert.equal(r.session.fields.channel, "flight");
+    r = processTurn(r.session, "SZX到PVG", fixedNow);
+    assert.ok(r.session.fields.from?.includes("SZX"));
+    assert.ok(r.session.fields.to?.includes("PVG"));
+    r = processTurn(r.session, "2026-12-10", fixedNow);
+    assert.equal(r.session.fields.date, "2026-12-10");
+    assert.equal(r.missing, "timeWindow");
+    r = processTurn(r.session, "不限", fixedNow);
+    assert.equal(r.session.fields.timeWindow, "不限");
+    assert.equal(r.session.fields.cabin, undefined, "bare 不限 must not set cabin");
+    assert.equal(r.missing, "cabin");
+    r = processTurn(r.session, "经济舱", fixedNow);
+    assert.equal(r.session.fields.cabin, "经济舱");
+    assert.equal(r.session.fields.timeWindow, "不限");
+    r = processTurn(r.session, "1人", fixedNow);
+    assert.equal(r.session.fields.passengers, 1);
+    r = processTurn(r.session, "2026-11-20 09:00", fixedNow);
+    assert.equal(r.session.fields.grabStartAt, "2026-11-20T01:00:00.000Z");
+    assert.equal(r.readyForConfirm, true);
+    assert.equal(r.session.fields.cabin, "经济舱");
+    assert.equal(r.session.fields.timeWindow, "不限");
+    assert.equal(r.confirmation!.lines.find((l) => l.label === "舱位")?.value, "经济舱");
+    assert.equal(r.confirmation!.lines.find((l) => l.label === "时间段")?.value, "不限");
+    assert.notEqual(r.confirmation!.lines.find((l) => l.label === "舱位")?.value, "不限");
+  });
+
+  it("correction: cabin 不限 in history then 经济舱 → cabin 经济舱", () => {
+    let r = processTurn(createEmptySession(), "机票", fixedNow);
+    r = processTurn(r.session, "SZX到PVG", fixedNow);
+    r = processTurn(r.session, "2026-12-10", fixedNow);
+    // Simulate polluted history where cabin was wrongly set to 不限
+    r = processTurn(
+      {
+        ...r.session,
+        fields: { ...r.session.fields, timeWindow: "不限", cabin: "不限" },
+      },
+      "经济舱",
+      fixedNow
+    );
+    assert.equal(r.session.fields.cabin, "经济舱");
+    assert.equal(r.session.fields.timeWindow, "不限");
+  });
+
+  it("train: missing timeWindow → 不限 → then 二等座 → seatClass 二等座", () => {
+    let r = processTurn(createEmptySession(), "火车", fixedNow);
+    r = processTurn(r.session, "韶关东到虎门", fixedNow);
+    r = processTurn(r.session, "2026-12-15", fixedNow);
+    assert.equal(r.missing, "timeWindow");
+    r = processTurn(r.session, "不限", fixedNow);
+    assert.equal(r.session.fields.timeWindow, "不限");
+    assert.equal(r.session.fields.seatClass, undefined, "bare 不限 must not set seatClass");
+    assert.equal(r.missing, "seatClass");
+    r = processTurn(r.session, "二等座", fixedNow);
+    assert.equal(r.session.fields.seatClass, "二等座");
+    r = processTurn(r.session, "1人", fixedNow);
+    r = processTurn(r.session, "2026-11-20 09:00", fixedNow);
+    assert.equal(r.readyForConfirm, true);
+    assert.equal(r.session.fields.seatClass, "二等座");
+    assert.equal(r.confirmation!.lines.find((l) => l.label === "席别")?.value, "二等座");
+  });
+
+  it("train correction: seatClass 不限 then 二等座 overrides", () => {
+    let r = processTurn(createEmptySession(), "火车", fixedNow);
+    r = processTurn(r.session, "韶关东到虎门", fixedNow);
+    r = processTurn(r.session, "2026-12-15", fixedNow);
+    r = processTurn(
+      {
+        ...r.session,
+        fields: { ...r.session.fields, timeWindow: "不限", seatClass: "不限" },
+      },
+      "二等座",
+      fixedNow
+    );
+    assert.equal(r.session.fields.seatClass, "二等座");
+  });
+
+  it("show: tier 不限 then 内场680 overrides", () => {
+    let r = processTurn(createEmptySession(), "演出", fixedNow);
+    r = processTurn(r.session, "周杰伦演唱会", fixedNow);
+    r = processTurn(r.session, "梅赛德斯-奔驰文化中心", fixedNow);
+    r = processTurn(r.session, "2026-12-31", fixedNow);
+    assert.equal(r.missing, "tier");
+    r = processTurn(r.session, "不限", fixedNow);
+    assert.equal(r.session.fields.tier, "不限");
+    assert.equal(r.session.fields.timeWindow, undefined, "show must not fill timeWindow from 不限");
+    // Later explicit tier while asking passengers
+    r = processTurn(r.session, "内场680", fixedNow);
+    assert.equal(r.session.fields.tier, "内场680");
+  });
+
+  it("negative: confirm must not show cabin 不限 when 经济舱 was provided", () => {
+    let r = processTurn(createEmptySession(), "机票", fixedNow);
+    r = processTurn(r.session, "SZX到PVG", fixedNow);
+    r = processTurn(r.session, "2026-12-10", fixedNow);
+    r = processTurn(r.session, "不限", fixedNow);
+    r = processTurn(r.session, "经济舱", fixedNow);
+    r = processTurn(r.session, "1人", fixedNow);
+    r = processTurn(r.session, "2026-11-20 09:00", fixedNow);
+    assert.equal(r.readyForConfirm, true);
+    const cabinLine = r.confirmation!.lines.find((l) => l.label === "舱位");
+    assert.equal(cabinLine?.value, "经济舱");
+    assert.notEqual(cabinLine?.value, "不限");
+  });
+
+  it("free-form 时间不限 still does not clobber seat (P1c regression)", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "北京南到上海虹桥 2026-12-01 时间不限 二等座 1张 现在开始盯票",
+      fixedNow
+    );
+    assert.equal(r.session.fields.timeWindow, "不限");
+    assert.equal(r.session.fields.seatClass, "二等座");
+  });
+
+  it("free-form bare 不限 + 经济舱: window 不限 cabin 经济舱", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "机票 SZX到PVG 2026-12-10 不限 经济舱 1人 2026-11-20 09:00开始盯票",
+      fixedNow
+    );
+    assert.equal(r.session.fields.timeWindow, "不限");
+    assert.equal(r.session.fields.cabin, "经济舱");
+    assert.equal(r.readyForConfirm, true);
   });
 });
