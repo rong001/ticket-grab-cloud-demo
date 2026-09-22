@@ -35,5 +35,8 @@ Missing fields / ambiguous city&airport / past grabStartAt / fake stations → *
 See also: `INTAKE_ACCEPTANCE_E2E.md` for redacted transcripts and HTTP evidence.
 
 ## Commits
-- Public demo:  — https://github.com/rong001/ticket-grab-cloud-demo/commit/ce944545bbcd0356b2f80928cca8bb55dcbfb58c
-- Private:  — https://github.com/rong001/ticket-grab-cloud/commit/ff23040059cd4052a8d6477d7cbdd546b689f52a
+- Public demo (feat):  — https://github.com/rong001/ticket-grab-cloud-demo/commit/ce944545bbcd0356b2f80928cca8bb55dcbfb58c
+- Public demo (docs):  — https://github.com/rong001/ticket-grab-cloud-demo/commit/835d1f9e5f7adb50e696e08de14d7bd540e4cd98
+- Private (feat):  — https://github.com/rong001/ticket-grab-cloud/commit/b335bd5daaa0ecb2e93706acb08c160cccf779d9
+- Private (api wire):  — https://github.com/rong001/ticket-grab-cloud/commit/ff23040059cd4052a8d6477d7cbdd546b689f52a
+- Private (docs):  — https://github.com/rong001/ticket-grab-cloud/commit/fe6f698b396368f7d617adac0df1766a62f506d0
