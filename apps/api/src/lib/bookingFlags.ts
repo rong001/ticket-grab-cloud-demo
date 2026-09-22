@@ -92,3 +92,20 @@ export function dryRunMode(): boolean {
 export function trainRealSubmitEnabled(): boolean {
   return resolveBookingFlags().trainRealSubmit;
 }
+
+/** Stable machine-readable code when assistive 12306 submit is gated off. */
+export const TRAIN_REAL_SUBMIT_DISABLED_CODE = "TRAIN_REAL_SUBMIT_DISABLED" as const;
+
+/**
+ * Honest next steps when TRAIN_REAL_SUBMIT is off.
+ * No real seat-hold / charge — user must login, captcha, enable gate, pay officially.
+ */
+export function trainRealSubmitDisabledNextSteps(): string[] {
+  return [
+    "在「账号绑定」(/accounts) 关联本人 12306 会话（用户名/密码）",
+    "如出现验证码/短信/人脸，请在站内引导步骤手动完成（本站不会自动打码或绕过）",
+    "由管理员将环境变量 TRAIN_REAL_SUBMIT=1 开启后，才允许协助提交",
+    "提交成功后请在官方 12306 收银台完成支付（本站不代收票款、不产生真实占座/扣款）",
+    "乘车人请在「乘车人」(/travelers) 维护；订单须绑定 travelerIds",
+  ];
+}

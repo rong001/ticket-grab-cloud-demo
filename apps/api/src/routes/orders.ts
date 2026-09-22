@@ -18,7 +18,14 @@ import { authenticate } from "../lib/auth.js";
 import { logActivity } from "../lib/activity.js";
 import { decryptSensitive, encryptSensitive } from "../lib/crypto.js";
 import { env } from "../env.js";
-import { dryRunMode, stubMode, trainRealSubmitEnabled } from "../lib/bookingFlags.js";
+import {
+  dryRunMode,
+  stubMode,
+  trainRealSubmitEnabled,
+  TRAIN_REAL_SUBMIT_DISABLED_CODE,
+  trainRealSubmitDisabledNextSteps,
+} from "../lib/bookingFlags.js";
+import { travelerSummariesForIds } from "../lib/travelers.js";
 import {
   fromPrismaOrderStatus,
   fromPrismaPlatform,
@@ -306,24 +313,69 @@ export async function orderRoutes(app: FastifyInstance) {
     const order = await prisma.order.findFirst({ where: { id, userId: user.sub } });
     if (!order) return reply.code(404).send({ error: "Not found" });
 
+    const current = fromPrismaOrderStatus(order.status);
+    if (current === "paid" || current === "cancelled") {
+      return reply.code(400).send({ error: `Cannot submit from status ${current}` });
+    }
+
     // Hard gate: live 12306 assistive submit requires explicit TRAIN_REAL_SUBMIT=1.
     // Stub mode remains available for demos. Intake/watch never call this path.
+    // When gated: do NOT call bookingSubmit / 12306 confirm; keep honest non-success status.
     if (
       order.channel === "train" &&
       !stubMode() &&
       !trainRealSubmitEnabled()
     ) {
+      const nextSteps = trainRealSubmitDisabledNextSteps();
+      // Keep draft / awaiting_login / failed — never promote to paid / 候补成功.
+      const keepStatus = current === "submitting" ? "draft" : current;
+      const prevPayload = (order.payload ?? {}) as Record<string, unknown>;
+      const updated = await prisma.order.update({
+        where: { id },
+        data: {
+          status: toPrismaOrderStatus(keepStatus as OrderStatus),
+          errorMessage: TRAIN_REAL_SUBMIT_DISABLED_CODE,
+          payload: asJson({
+            ...prevPayload,
+            nextSteps,
+            notes:
+              "TRAIN_REAL_SUBMIT 未开启：协助提交已拒绝，未调用 12306 占座/确认，本站不扣款。",
+            bookingMode: {
+              stub: stubMode(),
+              dryRun: dryRunMode(),
+              trainRealSubmit: false,
+            },
+            gate: {
+              code: TRAIN_REAL_SUBMIT_DISABLED_CODE,
+              trainRealSubmit: false,
+            },
+          }),
+        },
+      });
+      await notifyOrder(
+        order.requestId,
+        order.id,
+        "order_submit_gated",
+        "12306 协助提交未开启（TRAIN_REAL_SUBMIT=0）",
+        "请绑定会话、完成验证码、由管理员开闸后在官方支付。未产生真实占座/扣款。",
+        {
+          orderId: order.id,
+          code: TRAIN_REAL_SUBMIT_DISABLED_CODE,
+          trainRealSubmit: false,
+          status: fromPrismaOrderStatus(updated.status),
+        }
+      );
       return reply.code(403).send({
+        code: TRAIN_REAL_SUBMIT_DISABLED_CODE,
         error: "train_submit_disabled",
         message:
-          "12306 assistive submit is disabled on this deployment (TRAIN_REAL_SUBMIT≠1). Monitor/notify and official redirect remain available; pay on official 12306.",
+          "12306 assistive submit is disabled on this deployment (TRAIN_REAL_SUBMIT≠1). No live confirm/seat-hold/charge was attempted. Monitor/notify and official redirect remain available.",
         trainRealSubmit: false,
+        nextSteps,
+        orderId: order.id,
+        status: fromPrismaOrderStatus(updated.status),
+        order: publicOrder(updated),
       });
-    }
-
-    const current = fromPrismaOrderStatus(order.status);
-    if (current === "paid" || current === "cancelled") {
-      return reply.code(400).send({ error: `Cannot submit from status ${current}` });
     }
 
     const travelers = await prisma.traveler.findMany({
@@ -494,17 +546,8 @@ export async function orderRoutes(app: FastifyInstance) {
     });
     if (!row) return reply.code(404).send({ error: "Not found" });
 
-    const travelers = await prisma.traveler.findMany({
-      where: { userId: user.sub, id: { in: row.travelerIds } },
-      select: {
-        id: true,
-        name: true,
-        idType: true,
-        idNumberHint: true,
-        phone: true,
-        type: true,
-      },
-    });
+    // Summaries only: name / hint / relationship — never full ID or enc blob.
+    const travelers = await travelerSummariesForIds(user.sub, row.travelerIds);
 
     const preferred = (row.payload as { preferredPlatform?: PlatformKind } | null)
       ?.preferredPlatform;

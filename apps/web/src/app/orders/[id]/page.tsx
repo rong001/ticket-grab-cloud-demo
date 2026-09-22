@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { api, getToken } from "@/lib/api";
+import { api, ApiError, getToken } from "@/lib/api";
 import { useDamaiTheme } from "@/components/DamaiTheme";
 
 type EventRow = {
@@ -14,6 +14,14 @@ type EventRow = {
   createdAt: string;
 };
 
+type TravelerSummary = {
+  id: string;
+  name: string;
+  idNumberHint?: string | null;
+  relationship?: string;
+  type?: string;
+};
+
 type OrderDetail = {
   id: string;
   channel: string;
@@ -22,8 +30,13 @@ type OrderDetail = {
   currency?: string;
   externalOrderId?: string | null;
   errorMessage?: string | null;
-  payload?: { nextSteps?: string[]; notes?: string; confirmation?: unknown };
-  travelers?: { id: string; name: string; idNumberHint?: string; type: string }[];
+  payload?: {
+    nextSteps?: string[];
+    notes?: string;
+    confirmation?: unknown;
+    gate?: { code?: string; trainRealSubmit?: boolean };
+  };
+  travelers?: TravelerSummary[];
   timeline?: { at: string; status: string; label: string; body?: string }[];
   session?: { sessionStatus: string; platform: string };
   events?: EventRow[];
@@ -39,6 +52,12 @@ function statusClass(status: string): string {
   return "";
 }
 
+function relationshipLabel(r?: string): string {
+  if (r === "authorized") return "授权乘车人";
+  if (r === "self") return "本人";
+  return r || "";
+}
+
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -46,6 +65,11 @@ export default function OrderDetailPage() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
+  const [gateOff, setGateOff] = useState<{
+    code: string;
+    nextSteps: string[];
+    message: string;
+  } | null>(null);
   useDamaiTheme(data?.channel === "show");
 
   const load = useCallback(() => {
@@ -54,8 +78,23 @@ export default function OrderDetailPage() {
       return;
     }
     api<OrderDetail>(`/orders/${id}`)
-      .then(setData)
-      .catch((e) => setError(e.message));
+      .then((d) => {
+        setData(d);
+        const gateCode = d.payload?.gate?.code ?? d.errorMessage;
+        if (
+          gateCode === "TRAIN_REAL_SUBMIT_DISABLED" ||
+          d.payload?.gate?.trainRealSubmit === false
+        ) {
+          setGateOff({
+            code: "TRAIN_REAL_SUBMIT_DISABLED",
+            nextSteps: d.payload?.nextSteps ?? [],
+            message:
+              d.payload?.notes ??
+              "12306 协助提交未开启（TRAIN_REAL_SUBMIT=0），未产生真实占座/扣款。",
+          });
+        }
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, [id, router]);
 
   useEffect(() => {
@@ -65,11 +104,23 @@ export default function OrderDetailPage() {
   async function submit() {
     setBusy(true);
     setError("");
+    setInfo("");
     try {
       await api(`/orders/${id}/submit`, { method: "POST", body: "{}" });
+      setGateOff(null);
       load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "提交失败");
+      if (e instanceof ApiError && (e.code === "TRAIN_REAL_SUBMIT_DISABLED" || e.status === 403)) {
+        setGateOff({
+          code: e.code ?? "TRAIN_REAL_SUBMIT_DISABLED",
+          nextSteps: e.nextSteps,
+          message: e.message,
+        });
+        setInfo("协助提交已拒绝（门禁关闭）— 详见下方下一步。订单未标记已支付。");
+        load();
+      } else {
+        setError(e instanceof Error ? e.message : "提交失败");
+      }
     } finally {
       setBusy(false);
     }
@@ -118,6 +169,9 @@ export default function OrderDetailPage() {
   const personLabel =
     data.channel === "show" ? "观演人" : data.channel === "flight" ? "乘机人" : "乘车人";
 
+  const displayNextSteps =
+    gateOff?.nextSteps?.length ? gateOff.nextSteps : data.payload?.nextSteps ?? [];
+
   return (
     <div>
       <div className="page-header">
@@ -133,8 +187,35 @@ export default function OrderDetailPage() {
 
       {error && <p className="error" style={{ marginBottom: "1rem" }}>{error}</p>}
       {info && <p className="info-banner">{info}</p>}
-      {data.errorMessage && (
+      {data.errorMessage && data.errorMessage !== "TRAIN_REAL_SUBMIT_DISABLED" && (
         <p className="error" style={{ marginBottom: "1rem" }}>{data.errorMessage}</p>
+      )}
+
+      {gateOff && data.channel === "train" && (
+        <div className="card" style={{ borderColor: "var(--danger, #c45)", marginBottom: "1rem" }}>
+          <h2 className="section-title">协助提交未开启</h2>
+          <p className="meta" style={{ marginTop: 0 }}>
+            <code>{gateOff.code}</code> · trainRealSubmit=false · 未调用 12306 占座/扣款
+          </p>
+          <p style={{ marginBottom: "0.75rem" }}>{gateOff.message}</p>
+          {!!displayNextSteps.length && (
+            <ol className="plain">
+              {displayNextSteps.map((s, i) => (
+                <li key={i}>{s}</li>
+              ))}
+            </ol>
+          )}
+          <div className="btn-row" style={{ marginTop: "1rem" }}>
+            <Link href="/accounts">
+              <button type="button">去账号绑定 /accounts</button>
+            </Link>
+            <Link href="/travelers">
+              <button type="button" className="secondary">
+                维护乘车人 /travelers
+              </button>
+            </Link>
+          </div>
+        </div>
       )}
 
       <div className="card">
@@ -160,6 +241,11 @@ export default function OrderDetailPage() {
               账号绑定
             </button>
           </Link>
+          <Link href="/travelers">
+            <button type="button" className="ghost">
+              乘车人
+            </button>
+          </Link>
           {data.request?.id && (
             <Link href={`/requests/${data.request.id}`}>
               <button type="button" className="ghost">
@@ -171,16 +257,17 @@ export default function OrderDetailPage() {
         {data.session && (
           <p className="meta" style={{ margin: "1rem 0 0" }}>
             平台会话 · {data.session.platform} · {data.session.sessionStatus}
+            {data.status === "awaiting_login" ? " · 下一步：完成官方登录/验证码" : ""}
           </p>
         )}
-        {data.payload?.notes && (
+        {!gateOff && data.payload?.notes && (
           <p className="info-banner" style={{ marginTop: "1rem", marginBottom: 0 }}>
             {data.payload.notes}
           </p>
         )}
-        {!!data.payload?.nextSteps?.length && (
+        {!gateOff && !!displayNextSteps.length && (
           <ol className="plain" style={{ marginTop: "1rem" }}>
-            {data.payload.nextSteps.map((s, i) => (
+            {displayNextSteps.map((s, i) => (
               <li key={i}>{s}</li>
             ))}
           </ol>
@@ -195,7 +282,9 @@ export default function OrderDetailPage() {
             <span className="item-title">{t.name}</span>
             <span className="meta">
               {" "}
-              · {t.idNumberHint} · {t.type === "child" ? "儿童" : "成人"}
+              · {t.idNumberHint ?? "****"}
+              {t.relationship ? ` · ${relationshipLabel(t.relationship)}` : ""}
+              {t.type ? ` · ${t.type === "child" ? "儿童" : "成人"}` : ""}
             </span>
           </div>
         ))}
