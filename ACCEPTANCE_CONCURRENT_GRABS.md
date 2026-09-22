@@ -49,9 +49,9 @@ curl -sS "$BASE/health" | jq '{trainRealSubmit,bookingStub,providerMode}'
 ## Commit SHAs
 
 - Private feature: `7c713764087d40bf7275ef3261e5a2a507c5548a`
-- Private head (shared restore + useParams + docs): `832284ab3579c245abd92dcd7ab87c4a9a0c01ed`
+- Private head (shared restore + useParams + docs): `ae7d6056d8b22455d87daac7f5805fbb02217172`
 - Public demo feature: `99ec357bfe75cd65ee03e0f619f3b078ad772cdb` — https://github.com/rong001/ticket-grab-cloud-demo/commit/99ec357bfe75cd65ee03e0f619f3b078ad772cdb
-- Public head: `9d35d4d5f121d8fdac86ba44f8b623c2d005abd2` — https://github.com/rong001/ticket-grab-cloud-demo/commit/9d35d4d5f121d8fdac86ba44f8b623c2d005abd2
+- Public head: `d41428faea49aaaa9bd856c1f51840ba6bc4b5a1` — https://github.com/rong001/ticket-grab-cloud-demo/commit/d41428faea49aaaa9bd856c1f51840ba6bc4b5a1
 
 ## Live evidence
 
