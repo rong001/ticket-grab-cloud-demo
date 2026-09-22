@@ -91,6 +91,22 @@ curl -sS "$BASE/api/health" | jq '{trainRealSubmit,bookingStub}'
 
 Intake confirm also accepts optional `travelerIds` in the same shape.
 
+
+## Commit SHAs
+
+- Private: `2b0897963780286e126fc1dfdec2f82c304e4646`
+- Public demo: `e9ae3ed95c8dcf10d6cd7da861394ee40680b017` — https://github.com/rong001/ticket-grab-cloud-demo/commit/e9ae3ed95c8dcf10d6cd7da861394ee40680b017
+
+## Live evidence (2026-09-22)
+
+- `GET /api/health` → `trainRealSubmit=false`, `bookingStub=false`, `providerMode=live`
+- Register synthetic user → POST `/travelers` ×2 (self + authorized with consent) → hints only (`****4018`, `****1237`); authorized without consent → **400**
+- POST `/requests` train passengers=2 → POST `/watch` with two travelerIds → `status=queued`, traveler summaries bound
+- GET `/grabs?status=all` → traveler hints only; full ID absent from JSON
+- UI pages HTTP 200: `/travelers`, `/intake`, `/grabs`
+- Commerce stack :80/:443 untouched
+- Prisma migrate status: Database schema is up to date (6 migrations)
+
 ## Remaining main blocker (next round)
 
 **12306 real submit still gated** (`TRAIN_REAL_SUBMIT=false`): even with bound travelers, placing a real order still requires user-linked session + manual captcha/SMS + gate enablement + official payment handoff. Multi-pax bind does **not** unlock unattended purchase.
