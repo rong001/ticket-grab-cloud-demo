@@ -2,7 +2,7 @@
 
 **Measured (UTC):** 2026-09-22T06:46:49Z → 2026-09-22T06:53:02Z  
 **Private SHA:** `26be33d81cd4db54515a987e0fd38e25f0f6c664`  
-**Public demo SHA:** `33ab0025f0a96e65875b93a6b735f8900f4d3c96`  
+**Public demo SHA:** `8571ca9971306379e44a2e3fe6b44f8cbdcb1a6d`  
 **Live:** https://159.75.71.192:18444  
 **Wait after cancel:** **330s** (≥ full next 5-minute window)  
 **Machine timeline:** [`CANCEL_REPEATABLE_PROOF_TIMELINE.json`](./CANCEL_REPEATABLE_PROOF_TIMELINE.json)
@@ -73,3 +73,7 @@ grep watchJobId → ZERO_AFTER_CANCEL
 | No upstream HTTP for that job after cancel | **PASS** |
 | SMTP still blocked / no creds | **阻塞** (unchanged) |
 
+## Self-serve retest
+
+Third parties: run [`CANCEL_REPEATABLE_SELFTEST.sh`](./CANCEL_REPEATABLE_SELFTEST.sh) with your own account.
+See [`READONLY_QUEUE_EVIDENCE.md`](./READONLY_QUEUE_EVIDENCE.md) — Redis/SSH not required.
