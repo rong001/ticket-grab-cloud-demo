@@ -39,7 +39,7 @@ Flight inventory / show auto-buy: **待接入** — out of scope.
 | 4 | Submit → 403 `TRAIN_REAL_SUBMIT_DISABLED` + nextSteps; no 12306 network | PASS |
 | 5 | Watch without travelerIds → 400 `TRAVELER_IDS_REQUIRED` | PASS |
 | 6 | Health `trainRealSubmit=false` | PASS |
-| 7 | Live deploy keeps `TRAIN_REAL_SUBMIT=0` | PASS (after deploy) |
+| 7 | Live deploy keeps `TRAIN_REAL_SUBMIT=0` | PASS |
 | 8 | Overall unattended real purchase ready | **FAIL — 未通过** |
 
 ## API sketch (fake IDs only)
@@ -60,7 +60,16 @@ curl -sS "$BASE/health" | jq '{trainRealSubmit,bookingStub,providerMode}'
 
 ## Live evidence
 
-_(filled after deploy)_
+- `GET /api/health` → `trainRealSubmit=false`, `bookingStub=false`, `providerMode=live`
+- Synthetic register → 2 travelers (hints `****4018` / `****1237`; no full ID)
+- Train request passengers=2 → search (40 items) → watch with 2 travelerIds
+- `POST /grabs/:id/create-order` → **201** draft, 2 traveler summaries, nextSteps≥5, `trainRealSubmit=false`
+- Second create-order → same orderId, `reused=true`
+- `POST /orders/:id/submit` → **403** `TRAIN_REAL_SUBMIT_DISABLED`, status remains `draft`
+- UI HTTP 200: `/`, `/grabs`, `/orders/{id}`
+- Host `.env.production` still `TRAIN_REAL_SUBMIT=0`
+- Commerce :80/:443 untouched
+
 
 ## Remaining main blocker
 
