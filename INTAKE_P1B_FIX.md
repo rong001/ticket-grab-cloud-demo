@@ -19,7 +19,8 @@ P1 docs incorrectly marked `P1_cn_date` as PASS with `ready=True`.
 Monitor + official redirect only; never auto-purchase.
 
 ## Commits
-(filled after push)
+- Public demo: `bc408b147001290b270a22334531cbf1573ca9c1` — https://github.com/rong001/ticket-grab-cloud-demo/commit/bc408b147001290b270a22334531cbf1573ca9c1
+- Private: `512433bff8932a9c9387fb6db3ac578a3c6826b2` — https://github.com/rong001/ticket-grab-cloud/commit/512433bff8932a9c9387fb6db3ac578a3c6826b2
 
 ## Deploy
 - Rebuilt & restarted `ticket-grab-cloud` api+worker on 159.75.71.192; a-commerce-os / :80 / :443 untouched.
