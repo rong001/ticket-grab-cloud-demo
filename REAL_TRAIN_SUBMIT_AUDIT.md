@@ -128,7 +128,7 @@ Booking-related values after fix:
 
 ## 9. Public commit SHA
 
-`ff8284f6d0a65d611701ca9e6a6b8f7de66bf430` (honesty fix parent: `54f7766`)
+`03e7827670d9b5e00eef173d3e99bcd43a929278` (honesty: `54f7766`)
 
 ---
 
