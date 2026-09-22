@@ -55,8 +55,8 @@ curl -sS "$BASE/health" | jq '{trainRealSubmit,bookingStub,providerMode}'
 
 ## Commit SHAs
 
-- Private: _(pending)_
-- Public demo: _(pending)_
+- Private: `3ec2917dcd9baa37a4c650f6bbacfc5b75a1f690`
+- Public demo: `0a3cae7b8e111b020bc12df4b208ab173fe90c00` — https://github.com/rong001/ticket-grab-cloud-demo/commit/0a3cae7b8e111b020bc12df4b208ab173fe90c00
 
 ## Live evidence
 
