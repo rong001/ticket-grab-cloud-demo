@@ -222,6 +222,8 @@ model Order {
   externalOrderId       String?
   /// Channel-specific payload (shortlist item snapshot, nextSteps, confirmation fields).
   payload               Json?
+  /// Stable draft idempotency key: userId|watchJobId|itemId|sortedTravelerIds
+  draftFingerprint      String?
   errorMessage          String?
   paymentUrl            String?
   createdAt             DateTime            @default(now())
@@ -231,5 +233,7 @@ model Order {
   @@index([userId])
   @@index([requestId])
   @@index([status])
+  @@index([userId, draftFingerprint])
+  @@unique([draftFingerprint])
 }
 

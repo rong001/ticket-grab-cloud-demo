@@ -8,13 +8,139 @@ export type PickShortlistResult =
       error: string;
     };
 
+/** Collapse whitespace / full-width spaces; trim. */
+export function normalizePrefToken(raw: string): string {
+  return String(raw ?? "")
+    .replace(/[\u3000\s]+/g, " ")
+    .trim();
+}
+
+/** Train numbers compared case-insensitively after normalize. */
+export function normalizeTrainNo(raw: string): string {
+  return normalizePrefToken(raw).toUpperCase();
+}
+
+/**
+ * True only when the preference string itself explicitly asks for fuzzy/range matching.
+ * Conditions (any one):
+ * - trailing/embedded `*` or `?` glob (e.g. `G1*`, `二等*`)
+ * - explicit range separators between non-empty sides: `-` / `~` / `～` / `到` / `至`
+ *   (e.g. `G1~G9`, `280-580`) — not a bare hyphenated seat name alone without digits/letters both sides
+ * - prefs flag `fuzzyPrefs: true` (caller-checked separately)
+ *
+ * Bare exact prefs like `G1` / `380` / `二等座` must NEVER enable fuzzy.
+ */
+export function isExplicitFuzzyOrRangePref(pref: string): boolean {
+  const t = normalizePrefToken(pref);
+  if (!t) return false;
+  if (/[*?]/.test(t)) return true;
+  // Range: both sides non-empty around a range separator (ASCII/fullwidth/Chinese).
+  if (/^.+[-~～到至].+$/.test(t) && /[A-Za-z0-9\u4e00-\u9fff]/.test(t)) {
+    // Avoid treating normal Chinese seat labels that happen to contain 到 as ranges
+    // unless both sides look like codes/prices (letter/digit on each side or price-like).
+    const parts = t.split(/[-~～到至]/);
+    if (parts.length >= 2) {
+      const left = parts[0]!.trim();
+      const right = parts[parts.length - 1]!.trim();
+      if (left && right && /[A-Za-z0-9]/.test(left) && /[A-Za-z0-9]/.test(right)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** Simple glob: `*` → any chars, `?` → one char; otherwise exact. */
+function globMatch(pattern: string, value: string): boolean {
+  const esc = pattern
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, ".*")
+    .replace(/\?/g, ".");
+  return new RegExp(`^${esc}$`).test(value);
+}
+
+function rangeMatch(pref: string, value: string): boolean {
+  const t = normalizePrefToken(pref);
+  const parts = t.split(/[-~～到至]/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length < 2) return false;
+  const lo = parts[0]!;
+  const hi = parts[parts.length - 1]!;
+  // Numeric tier/price range
+  if (/^\d+(\.\d+)?$/.test(lo) && /^\d+(\.\d+)?$/.test(hi) && /^\d+(\.\d+)?$/.test(value)) {
+    const n = Number(value);
+    return n >= Number(lo) && n <= Number(hi);
+  }
+  // Lexicographic train-code range (same prefix letter)
+  const v = value.toUpperCase();
+  const a = lo.toUpperCase();
+  const b = hi.toUpperCase();
+  return v >= a && v <= b;
+}
+
+/**
+ * Exact whole-token equality after normalize.
+ * For tier strings like "看台 380", preferred "380" matches as a whole token;
+ * preferred "380" does NOT match token "1380" (no substring).
+ */
+export function exactTokenEquals(candidate: string, preferred: string): boolean {
+  const c = normalizePrefToken(candidate);
+  const p = normalizePrefToken(preferred);
+  if (!c || !p) return false;
+  if (c === p) return true;
+  const tokens = c.split(" ").filter(Boolean);
+  return tokens.some((tok) => tok === p);
+}
+
+function trainNoEquals(candidate: string, preferred: string): boolean {
+  const c = normalizeTrainNo(candidate);
+  const p = normalizeTrainNo(preferred);
+  return !!c && !!p && c === p;
+}
+
+function matchTrainPref(trainNo: string, pref: string, fuzzyAllowed: boolean): boolean {
+  if (fuzzyAllowed && isExplicitFuzzyOrRangePref(pref)) {
+    const c = normalizeTrainNo(trainNo);
+    const p = normalizeTrainNo(pref);
+    if (/[*?]/.test(p)) return globMatch(p, c);
+    if (rangeMatch(pref, c)) return true;
+    return false;
+  }
+  return trainNoEquals(trainNo, pref);
+}
+
+function matchSeatOrTierPref(
+  structured: string,
+  pref: string,
+  fuzzyAllowed: boolean
+): boolean {
+  if (fuzzyAllowed && isExplicitFuzzyOrRangePref(pref)) {
+    const c = normalizePrefToken(structured);
+    const p = normalizePrefToken(pref);
+    if (/[*?]/.test(p)) {
+      if (globMatch(p, c)) return true;
+      return c.split(" ").some((tok) => globMatch(p, tok));
+    }
+    // Range against numeric tokens inside structured field
+    for (const tok of [c, ...c.split(" ").filter(Boolean)]) {
+      if (rangeMatch(pref, tok)) return true;
+    }
+    return false;
+  }
+  return exactTokenEquals(structured, pref);
+}
+
 /**
  * Strict shortlist pick for create-order.
  * - Explicit selectedId: exact match only (no pool widening).
  * - Auto: only available/limited; preferences MUST match when set.
+ * - Preference matching uses **normalized exact token / whole-field equality**
+ *   on structured meta fields (trainNo / seatClass / tier).
+ * - Missing structured fields → cannot claim match via loose title/subtitle substring
+ *   (prevents G1⊂G10/G100 and 380⊂1380).
+ * - Fuzzy/range matching ONLY when the preference string itself explicitly expresses
+ *   glob/range (see isExplicitFuzzyOrRangePref) OR preferences.fuzzyPrefs === true
+ *   together with an explicit fuzzy/range token.
  * - Never silently falls back to sold-out or to items outside preferred trains/seats/tiers.
- * - scheduleOnly items may be returned only when they survive the same strict filters
- *   (reference draft); callers must not treat them as sellable inventory success.
  */
 export function pickShortlistItem(
   items: ShortlistItem[],
@@ -63,11 +189,18 @@ export function pickShortlistItem(
   const preferredTiers = Array.isArray(prefs.preferredTiers)
     ? prefs.preferredTiers.map(String).filter(Boolean)
     : [];
+  // Opt-in flag only; still requires each pref token to be explicit fuzzy/range.
+  const fuzzyPrefsFlag = prefs.fuzzyPrefs === true;
 
   if (preferredTrains.length) {
     const filtered = pool.filter((i) => {
-      const no = String(i.meta?.trainNo ?? i.title.split(" ")[0] ?? "");
-      return preferredTrains.some((t) => no.includes(t) || i.title.includes(t));
+      const structured = i.meta?.trainNo;
+      // Missing structured trainNo → cannot claim match via title substring.
+      if (structured == null || String(structured).trim() === "") return false;
+      const no = String(structured);
+      return preferredTrains.some((t) =>
+        matchTrainPref(no, t, fuzzyPrefsFlag || isExplicitFuzzyOrRangePref(t))
+      );
     });
     if (!filtered.length) {
       return {
@@ -81,9 +214,12 @@ export function pickShortlistItem(
 
   if (preferredSeats.length) {
     const filtered = pool.filter((i) => {
-      const seat = String(i.meta?.seatClass ?? "");
-      return preferredSeats.some(
-        (s) => seat.includes(s) || i.title.includes(s) || i.subtitle?.includes(s)
+      const structured = i.meta?.seatClass;
+      // Missing structured seatClass → cannot claim match via title/subtitle substring.
+      if (structured == null || String(structured).trim() === "") return false;
+      const seat = String(structured);
+      return preferredSeats.some((s) =>
+        matchSeatOrTierPref(seat, s, fuzzyPrefsFlag || isExplicitFuzzyOrRangePref(s))
       );
     });
     if (!filtered.length) {
@@ -98,8 +234,13 @@ export function pickShortlistItem(
 
   if (preferredTiers.length) {
     const filtered = pool.filter((i) => {
-      const tier = String(i.meta?.tier ?? "");
-      return preferredTiers.some((t) => tier.includes(t));
+      const structured = i.meta?.tier;
+      // Missing structured tier → cannot claim match via loose includes on other fields.
+      if (structured == null || String(structured).trim() === "") return false;
+      const tier = String(structured);
+      return preferredTiers.some((t) =>
+        matchSeatOrTierPref(tier, t, fuzzyPrefsFlag || isExplicitFuzzyOrRangePref(t))
+      );
     });
     if (!filtered.length) {
       return {

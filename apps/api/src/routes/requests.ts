@@ -765,28 +765,64 @@ export async function requestRoutes(app: FastifyInstance) {
       bind.travelerIds
     );
 
-    // Atomic idempotency: advisory xact lock + find-or-create for
-    // (user, watchId, selectedShortlistItemId, travelerIds-set).
+    // Atomic idempotency: advisory xact lock + find-or-create by draftFingerprint.
+    // Lookup is by (userId, draftFingerprint) — NOT a take:N recent window
+    // (other updated drafts must not crowd out the target combo).
     const { order, reused } = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${fingerprint}))`;
 
-      const candidates = await tx.order.findMany({
+      // 1) Preferred path: indexed column match
+      let existing = await tx.order.findFirst({
         where: {
           userId: user.sub,
-          requestId: watch.requestId,
-          selectedShortlistItemId: item.id,
+          draftFingerprint: fingerprint,
           status: { in: ["draft", "awaiting_login"] },
         },
-        orderBy: { createdAt: "desc" },
-        take: 20,
+        orderBy: { createdAt: "asc" },
       });
-      const existing = candidates.find((o) => {
-        const payload = (o.payload ?? {}) as Record<string, unknown>;
-        return (
-          payload.watchJobId === watchJobId &&
-          sameTravelerIdSet(o.travelerIds ?? [], bind.travelerIds)
-        );
-      });
+
+      // 2) Compatibility: legacy rows with fingerprint only in payload JSON
+      if (!existing) {
+        const payloadHits = await tx.order.findMany({
+          where: {
+            userId: user.sub,
+            draftFingerprint: null,
+            status: { in: ["draft", "awaiting_login"] },
+            selectedShortlistItemId: item.id,
+          },
+          orderBy: { createdAt: "asc" },
+        });
+        existing =
+          payloadHits.find((o) => {
+            const payload = (o.payload ?? {}) as Record<string, unknown>;
+            return (
+              payload.draftFingerprint === fingerprint ||
+              (payload.watchJobId === watchJobId &&
+                sameTravelerIdSet(o.travelerIds ?? [], bind.travelerIds))
+            );
+          }) ?? null;
+
+        // Backfill column when we matched a legacy row
+        if (existing && !existing.draftFingerprint) {
+          try {
+            existing = await tx.order.update({
+              where: { id: existing.id },
+              data: { draftFingerprint: fingerprint },
+            });
+          } catch {
+            // Unique race: another row already owns this fingerprint — re-read it
+            existing = await tx.order.findFirst({
+              where: {
+                userId: user.sub,
+                draftFingerprint: fingerprint,
+                status: { in: ["draft", "awaiting_login"] },
+              },
+              orderBy: { createdAt: "asc" },
+            });
+          }
+        }
+      }
+
       if (existing) {
         return { order: existing, reused: true as const };
       }
@@ -801,6 +837,7 @@ export async function requestRoutes(app: FastifyInstance) {
           travelerIds: bind.travelerIds,
           amount,
           currency: item.currency ?? "CNY",
+          draftFingerprint: fingerprint,
           payload: asJson({
             shortlistItem: item,
             watchJobId,

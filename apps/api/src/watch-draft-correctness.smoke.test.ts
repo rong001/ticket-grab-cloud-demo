@@ -10,11 +10,13 @@ const ID_B = "110101199001011237";
 const ID_C = "110101199001011501";
 
 /**
- * watch-draft-correctness:
+ * watch-draft-correctness-v2:
  * 1) preferred train/seat with no match → 400 NO_MATCHING_SHORTLIST, no order
  * 2) sold-out-only shortlist → 400, no silent success
  * 3) concurrent create-order → exactly ONE draft for same combo
  * 4) different watch must not share that draft
+ * 5) substring prefs (G1⊂G10, 380⊂1380) → 400, no draft
+ * 6) >20 other fingerprint drafts must not prevent reuse of target
  */
 describe("watch-draft-correctness", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
@@ -478,5 +480,238 @@ describe("watch-draft-correctness", () => {
     });
     assert.equal(otherUserOrder.statusCode, 201, otherUserOrder.body);
     assert.notEqual((otherUserOrder.json() as { orderId: string }).orderId, ids[0]);
+  });
+
+  it("NEG substring: preferred G1 vs pool G10/G100 → 400; no draft", async () => {
+    const req = await app.inject({
+      method: "POST",
+      url: "/requests",
+      headers: auth(),
+      payload: {
+        channel: "train",
+        fields: { from: "北京南", to: "上海虹桥", date: "2026-10-07", passengers: 1 },
+      },
+    });
+    assert.equal(req.statusCode, 201, req.body);
+    const rid = req.json().id as string;
+    requestIds.push(rid);
+
+    await prisma.shortlistSnapshot.create({
+      data: {
+        requestId: rid,
+        provider: "fixture",
+        mode: "fixture",
+        liveOk: true,
+        items: [
+          {
+            id: "pool-g10",
+            channel: "train",
+            title: "G10 北京南 → 上海虹桥",
+            availability: "available",
+            meta: { trainNo: "G10", seatClass: "二等座" },
+          },
+          {
+            id: "pool-g100",
+            channel: "train",
+            title: "G100 北京南 → 上海虹桥",
+            availability: "available",
+            meta: { trainNo: "G100", seatClass: "二等座" },
+          },
+        ],
+        notes: "substring-neg-g1",
+      },
+    });
+
+    const watch = await app.inject({
+      method: "POST",
+      url: `/requests/${rid}/watch`,
+      headers: auth(),
+      payload: {
+        intervalMinutes: 15,
+        travelerIds: [travelerA],
+        preferences: { preferredTrains: ["G1"] },
+      },
+    });
+    assert.equal(watch.statusCode, 201, watch.body);
+    const wid = watch.json().id as string;
+    watchIds.push(wid);
+
+    const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+    const before = await prisma.order.count({ where: { userId: user.id } });
+
+    const created = await app.inject({
+      method: "POST",
+      url: `/grabs/${wid}/create-order`,
+      headers: auth(),
+      payload: {},
+    });
+    assert.equal(created.statusCode, 400, created.body);
+    assert.equal(created.json().code, "NO_MATCHING_SHORTLIST");
+    const after = await prisma.order.count({ where: { userId: user.id } });
+    assert.equal(after, before, "no draft on G1⊂G10/G100 miss");
+  });
+
+  it("NEG substring: preferred 380 vs pool 1380 → 400; no draft", async () => {
+    const req = await app.inject({
+      method: "POST",
+      url: "/requests",
+      headers: auth(),
+      payload: {
+        channel: "show",
+        fields: { eventName: "测试演出380", city: "上海", date: "2026-11-01", quantity: 1 },
+      },
+    });
+    assert.equal(req.statusCode, 201, req.body);
+    const rid = req.json().id as string;
+    requestIds.push(rid);
+
+    await prisma.shortlistSnapshot.create({
+      data: {
+        requestId: rid,
+        provider: "fixture",
+        mode: "fixture",
+        liveOk: true,
+        items: [
+          {
+            id: "tier-1380",
+            channel: "show",
+            title: "看台 1380",
+            availability: "available",
+            meta: { tier: "1380" },
+          },
+        ],
+        notes: "substring-neg-380",
+      },
+    });
+
+    const watch = await app.inject({
+      method: "POST",
+      url: `/requests/${rid}/watch`,
+      headers: auth(),
+      payload: {
+        intervalMinutes: 15,
+        travelerIds: [travelerA],
+        preferences: { preferredTiers: ["380"] },
+      },
+    });
+    assert.equal(watch.statusCode, 201, watch.body);
+    const wid = watch.json().id as string;
+    watchIds.push(wid);
+
+    const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+    const before = await prisma.order.count({ where: { userId: user.id } });
+
+    const created = await app.inject({
+      method: "POST",
+      url: `/grabs/${wid}/create-order`,
+      headers: auth(),
+      payload: {},
+    });
+    assert.equal(created.statusCode, 400, created.body);
+    assert.equal(created.json().code, "NO_MATCHING_SHORTLIST");
+    const after = await prisma.order.count({ where: { userId: user.id } });
+    assert.equal(after, before, "no draft on 380⊂1380 miss");
+  });
+
+  it(">20 other fingerprint drafts do not prevent target reuse", async () => {
+    const req = await app.inject({
+      method: "POST",
+      url: "/requests",
+      headers: auth(),
+      payload: {
+        channel: "train",
+        fields: { from: "北京南", to: "上海虹桥", date: "2026-10-08", passengers: 1 },
+      },
+    });
+    assert.equal(req.statusCode, 201, req.body);
+    const rid = req.json().id as string;
+    requestIds.push(rid);
+
+    const search = await app.inject({
+      method: "POST",
+      url: `/requests/${rid}/search`,
+      headers: auth(),
+      payload: {},
+    });
+    assert.equal(search.statusCode, 200, search.body);
+    const items = search.json().result.items as { id: string }[];
+    assert.ok(items.length > 0);
+    const itemId = items[0]!.id;
+
+    const watch = await app.inject({
+      method: "POST",
+      url: `/requests/${rid}/watch`,
+      headers: auth(),
+      payload: {
+        intervalMinutes: 15,
+        travelerIds: [travelerA],
+      },
+    });
+    assert.equal(watch.statusCode, 201, watch.body);
+    const wid = watch.json().id as string;
+    watchIds.push(wid);
+
+    // Create the target draft first
+    const first = await app.inject({
+      method: "POST",
+      url: `/grabs/${wid}/create-order`,
+      headers: auth(),
+      payload: { selectedShortlistItemId: itemId },
+    });
+    assert.ok([200, 201].includes(first.statusCode), first.body);
+    const targetOrderId = (first.json() as { orderId: string }).orderId;
+
+    const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+
+    // Seed >20 other candidate drafts (different fingerprints) and bump updatedAt
+    const noise: { id: string }[] = [];
+    for (let i = 0; i < 25; i++) {
+      const o = await prisma.order.create({
+        data: {
+          userId: user.id,
+          requestId: rid,
+          channel: "train",
+          status: "draft",
+          selectedShortlistItemId: `noise-item-${i}`,
+          travelerIds: [travelerA],
+          draftFingerprint: `${user.id}|noise-watch-${i}|noise-item-${i}|${travelerA}`,
+          payload: {
+            watchJobId: `noise-watch-${i}`,
+            draftFingerprint: `${user.id}|noise-watch-${i}|noise-item-${i}|${travelerA}`,
+            notes: "noise crowd window",
+          },
+        },
+      });
+      noise.push(o);
+    }
+    // Touch noise rows so they are the most recently updated
+    for (const o of noise) {
+      await prisma.order.update({
+        where: { id: o.id },
+        data: { payload: { noiseTouch: Date.now(), id: o.id } },
+      });
+    }
+
+    const second = await app.inject({
+      method: "POST",
+      url: `/grabs/${wid}/create-order`,
+      headers: auth(),
+      payload: { selectedShortlistItemId: itemId },
+    });
+    assert.ok([200, 201].includes(second.statusCode), second.body);
+    const body = second.json() as { orderId: string; reused?: boolean };
+    assert.equal(body.orderId, targetOrderId, "must reuse original orderId despite >20 noise drafts");
+    assert.equal(body.reused, true);
+
+    const draftsForCombo = await prisma.order.count({
+      where: {
+        userId: user.id,
+        draftFingerprint: {
+          equals: (await prisma.order.findUniqueOrThrow({ where: { id: targetOrderId } }))
+            .draftFingerprint!,
+        },
+      },
+    });
+    assert.equal(draftsForCombo, 1);
   });
 });

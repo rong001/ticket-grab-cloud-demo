@@ -1,0 +1,78 @@
+TAP version 13
+# Subtest: pickShortlistItem strict prefs
+    # Subtest: returns SHORTLIST_EMPTY for empty list
+    ok 1 - returns SHORTLIST_EMPTY for empty list
+    # Subtest: does not silently pick sold_out when no available/limited
+    ok 2 - does not silently pick sold_out when no available/limited
+    # Subtest: preferred train with no match → NO_MATCHING_SHORTLIST
+    ok 3 - preferred train with no match → NO_MATCHING_SHORTLIST
+    # Subtest: preferred seat with no match → NO_MATCHING_SHORTLIST
+    ok 4 - preferred seat with no match → NO_MATCHING_SHORTLIST
+    # Subtest: preferred tier with no match → NO_MATCHING_SHORTLIST
+    ok 5 - preferred tier with no match → NO_MATCHING_SHORTLIST
+    # Subtest: matching preferred train returns that item (no silent broaden)
+    ok 6 - matching preferred train returns that item (no silent broaden)
+    # Subtest: explicit selectedId still works even if sold_out
+    ok 7 - explicit selectedId still works even if sold_out
+    # Subtest: prefers non-scheduleOnly when both match
+    ok 8 - prefers non-scheduleOnly when both match
+    # Subtest: NEG: preferred G1 must NOT match pool G10/G100 (no substring)
+    ok 9 - NEG: preferred G1 must NOT match pool G10/G100 (no substring)
+    # Subtest: POS: preferred G10 selects exact G10 in pool
+    ok 10 - POS: preferred G10 selects exact G10 in pool
+    # Subtest: NEG: preferred 380 must NOT match tier 1380 (no substring)
+    ok 11 - NEG: preferred 380 must NOT match tier 1380 (no substring)
+    # Subtest: POS: preferred 380 selects exact tier 380
+    ok 12 - POS: preferred 380 selects exact tier 380
+    # Subtest: missing structured trainNo → cannot match via title substring
+    ok 14 - missing structured trainNo → cannot match via title substring
+    # Subtest: explicit fuzzy glob G1* matches G10/G100 when pref contains *
+    ok 15 - explicit fuzzy glob G1* matches G10/G100 when pref contains *
+    # Subtest: explicit numeric tier range 300-400 matches 380 only
+    ok 16 - explicit numeric tier range 300-400 matches 380 only
+ok 1 - pickShortlistItem strict prefs
+  ---
+  ...
+# Subtest: pref normalize / fuzzy detection
+    # Subtest: normalizeTrainNo uppercases
+    ok 1 - normalizeTrainNo uppercases
+    # Subtest: exactTokenEquals does not substring
+    ok 2 - exactTokenEquals does not substring
+    # Subtest: bare G1 is not fuzzy; G1* and 280-580 are
+    ok 3 - bare G1 is not fuzzy; G1* and 280-580 are
+ok 2 - pref normalize / fuzzy detection
+  ---
+  ...
+# Subtest: watchDraftFingerprint
+    # Subtest: is order-independent for traveler set
+    ok 1 - is order-independent for traveler set
+    # Subtest: sameTravelerIdSet ignores order
+    ok 2 - sameTravelerIdSet ignores order
+ok 3 - watchDraftFingerprint
+  ---
+  ...
+# Subtest: watch-draft-correctness
+    # Subtest: register primary + other user + travelers
+    ok 1 - register primary + other user + travelers
+    # Subtest: preferred train with no match → 400 NO_MATCHING_SHORTLIST; no order
+    ok 2 - preferred train with no match → 400 NO_MATCHING_SHORTLIST; no order
+    # Subtest: preferred seat with no match → 400 NO_MATCHING_SHORTLIST
+    ok 3 - preferred seat with no match → 400 NO_MATCHING_SHORTLIST
+    # Subtest: sold-out-only shortlist → 400; does not pick sold_out as success
+    ok 4 - sold-out-only shortlist → 400; does not pick sold_out as success
+    # Subtest: concurrent create-order → exactly ONE draft for same combo
+    ok 5 - concurrent create-order → exactly ONE draft for same combo
+    # Subtest: NEG substring: preferred G1 vs pool G10/G100 → 400; no draft
+    ok 6 - NEG substring: preferred G1 vs pool G10/G100 → 400; no draft
+    # Subtest: NEG substring: preferred 380 vs pool 1380 → 400; no draft
+    ok 7 - NEG substring: preferred 380 vs pool 1380 → 400; no draft
+    # Subtest: >20 other fingerprint drafts do not prevent target reuse
+    ok 8 - >20 other fingerprint drafts do not prevent target reuse
+ok 4 - watch-draft-correctness
+  ---
+  ...
+1..4
+# tests 29
+# suites 4
+# pass 29
+# fail 0
