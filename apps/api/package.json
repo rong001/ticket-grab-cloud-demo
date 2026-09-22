@@ -7,9 +7,10 @@
     "build": "prisma generate && tsc -p tsconfig.json",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
-    "test": "PROVIDER_MODE=fixture BOOKING_STUB=1 ALLOW_PUBLIC_REGISTER=1 node --import tsx --test src/lib/pickShortlistItem.test.ts src/intake.test.ts src/orders.smoke.test.ts src/multi-pax.smoke.test.ts src/intake-confirm-traveler-select.smoke.test.ts && PROVIDER_MODE=fixture BOOKING_STUB=0 ALLOW_PUBLIC_REGISTER=1 node --import tsx --test src/train-order-gate.smoke.test.ts src/watch-to-order-draft.smoke.test.ts src/concurrent-grabs.smoke.test.ts src/show-attendee-watch-order.smoke.test.ts src/flight-pax-watch-order.smoke.test.ts src/watch-draft-correctness.smoke.test.ts",
+    "test": "PROVIDER_MODE=fixture BOOKING_STUB=1 ALLOW_PUBLIC_REGISTER=1 node --import tsx --test src/lib/pickShortlistItem.test.ts src/intake.test.ts src/orders.smoke.test.ts src/multi-pax.smoke.test.ts src/intake-confirm-traveler-select.smoke.test.ts && CORS_ORIGIN='https://159.75.71.192:18444,https://159.75.71.192:18090' PROVIDER_MODE=fixture BOOKING_STUB=0 ALLOW_PUBLIC_REGISTER=1 node --import tsx --test src/train-order-gate.smoke.test.ts src/watch-to-order-draft.smoke.test.ts src/concurrent-grabs.smoke.test.ts src/show-attendee-watch-order.smoke.test.ts src/flight-pax-watch-order.smoke.test.ts src/cors-origin.smoke.test.ts src/watch-draft-correctness.smoke.test.ts",
     "prisma": "prisma",
-    "test:watch-draft-correctness": "PROVIDER_MODE=fixture BOOKING_STUB=0 ALLOW_PUBLIC_REGISTER=1 node --import tsx --test src/lib/pickShortlistItem.test.ts src/watch-draft-correctness.smoke.test.ts && node --import tsx --test ../web/src/lib/orderGate.test.ts"
+    "test:watch-draft-correctness": "CORS_ORIGIN='https://159.75.71.192:18444,https://159.75.71.192:18090' PROVIDER_MODE=fixture BOOKING_STUB=0 ALLOW_PUBLIC_REGISTER=1 node --import tsx --test src/lib/pickShortlistItem.test.ts src/cors-origin.smoke.test.ts src/watch-draft-correctness.smoke.test.ts && node --import tsx --test ../web/src/lib/orderGate.test.ts",
+    "test:cors-origin": "CORS_ORIGIN='https://159.75.71.192:18444,https://159.75.71.192:18090' PROVIDER_MODE=fixture BOOKING_STUB=1 ALLOW_PUBLIC_REGISTER=1 node --import tsx --test src/cors-origin.smoke.test.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",

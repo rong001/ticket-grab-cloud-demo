@@ -551,6 +551,75 @@ describe("watch-draft-correctness", () => {
     assert.equal(after, before, "no draft on G1⊂G10/G100 miss");
   });
 
+  it("NEG range numeric: preferred G1~G9 vs pool G10/G100 → 400; no draft", async () => {
+    const req = await app.inject({
+      method: "POST",
+      url: "/requests",
+      headers: auth(),
+      payload: {
+        channel: "train",
+        fields: { from: "北京南", to: "上海虹桥", date: "2026-10-09", passengers: 1 },
+      },
+    });
+    assert.equal(req.statusCode, 201, req.body);
+    const rid = req.json().id as string;
+    requestIds.push(rid);
+
+    await prisma.shortlistSnapshot.create({
+      data: {
+        requestId: rid,
+        provider: "fixture",
+        mode: "fixture",
+        liveOk: true,
+        items: [
+          {
+            id: "pool-g10-range",
+            channel: "train",
+            title: "G10 北京南 → 上海虹桥",
+            availability: "available",
+            meta: { trainNo: "G10", seatClass: "二等座" },
+          },
+          {
+            id: "pool-g100-range",
+            channel: "train",
+            title: "G100 北京南 → 上海虹桥",
+            availability: "available",
+            meta: { trainNo: "G100", seatClass: "二等座" },
+          },
+        ],
+        notes: "range-neg-g1-g9",
+      },
+    });
+
+    const watch = await app.inject({
+      method: "POST",
+      url: `/requests/${rid}/watch`,
+      headers: auth(),
+      payload: {
+        intervalMinutes: 15,
+        travelerIds: [travelerA],
+        preferences: { preferredTrains: ["G1~G9"] },
+      },
+    });
+    assert.equal(watch.statusCode, 201, watch.body);
+    const wid = watch.json().id as string;
+    watchIds.push(wid);
+
+    const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+    const before = await prisma.order.count({ where: { userId: user.id } });
+
+    const created = await app.inject({
+      method: "POST",
+      url: `/grabs/${wid}/create-order`,
+      headers: auth(),
+      payload: {},
+    });
+    assert.equal(created.statusCode, 400, created.body);
+    assert.equal(created.json().code, "NO_MATCHING_SHORTLIST");
+    const after = await prisma.order.count({ where: { userId: user.id } });
+    assert.equal(after, before, "no draft on G1~G9 vs G10/G100 miss");
+  });
+
   it("NEG substring: preferred 380 vs pool 1380 → 400; no draft", async () => {
     const req = await app.inject({
       method: "POST",
@@ -663,32 +732,38 @@ describe("watch-draft-correctness", () => {
 
     const user = await prisma.user.findUniqueOrThrow({ where: { email } });
 
-    // Seed >20 other candidate drafts (different fingerprints) and bump updatedAt
+    // Seed >20 other drafts that crowd a recent window:
+    // same userId + requestId + **same selectedShortlistItemId as target**,
+    // but different watchJobId / traveler-set fingerprints (must not block reuse).
     const noise: { id: string }[] = [];
     for (let i = 0; i < 25; i++) {
+      const noiseWatch = `noise-watch-${i}`;
+      // Alternate traveler fingerprints so itemId collision is realistic under take:N scans
+      const noiseTravelers = i % 2 === 0 ? [travelerA, travelerB] : [travelerB];
+      const noiseFp = `${user.id}|${noiseWatch}|${itemId}|${[...noiseTravelers].sort().join(",")}`;
       const o = await prisma.order.create({
         data: {
           userId: user.id,
           requestId: rid,
           channel: "train",
           status: "draft",
-          selectedShortlistItemId: `noise-item-${i}`,
-          travelerIds: [travelerA],
-          draftFingerprint: `${user.id}|noise-watch-${i}|noise-item-${i}|${travelerA}`,
+          selectedShortlistItemId: itemId, // same itemId as target
+          travelerIds: noiseTravelers,
+          draftFingerprint: noiseFp,
           payload: {
-            watchJobId: `noise-watch-${i}`,
-            draftFingerprint: `${user.id}|noise-watch-${i}|noise-item-${i}|${travelerA}`,
-            notes: "noise crowd window",
+            watchJobId: noiseWatch,
+            draftFingerprint: noiseFp,
+            notes: "noise crowd window same-itemId",
           },
         },
       });
       noise.push(o);
     }
-    // Touch noise rows so they are the most recently updated
+    // Touch noise rows so they are the most recently updated (crowd recent window)
     for (const o of noise) {
       await prisma.order.update({
         where: { id: o.id },
-        data: { payload: { noiseTouch: Date.now(), id: o.id } },
+        data: { payload: { noiseTouch: Date.now(), id: o.id, selectedShortlistItemId: itemId } },
       });
     }
 

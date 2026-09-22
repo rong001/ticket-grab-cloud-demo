@@ -8,6 +8,7 @@ import {
   isExplicitFuzzyOrRangePref,
   exactTokenEquals,
   normalizeTrainNo,
+  parseTrainLikeCode,
 } from "./pickShortlistItem.js";
 
 function item(
@@ -287,6 +288,89 @@ describe("pickShortlistItem strict prefs", () => {
     assert.equal(r.ok, true);
     if (r.ok) assert.equal(r.item.id, "t380");
   });
+
+  it("NEG: preferred G1~G9 must NOT match pool G10/G100 (numeric range, not lex)", () => {
+    const items = [
+      item({
+        id: "g10",
+        title: "G10",
+        meta: { trainNo: "G10", seatClass: "二等座" },
+      }),
+      item({
+        id: "g100",
+        title: "G100",
+        meta: { trainNo: "G100", seatClass: "二等座" },
+      }),
+    ];
+    const r = pickShortlistItem(items, { preferredTrains: ["G1~G9"] });
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.equal(r.code, "NO_MATCHING_SHORTLIST");
+  });
+
+  it("POS: preferred G1~G9 matches G5 (numeric train range)", () => {
+    const items = [
+      item({
+        id: "g5",
+        title: "G5",
+        meta: { trainNo: "G5", seatClass: "二等座" },
+      }),
+      item({
+        id: "g10",
+        title: "G10",
+        meta: { trainNo: "G10", seatClass: "二等座" },
+      }),
+    ];
+    const r = pickShortlistItem(items, { preferredTrains: ["G1~G9"] });
+    assert.equal(r.ok, true);
+    if (r.ok) assert.equal(r.item.id, "g5");
+  });
+
+  it("NEG: different train prefix in range → NO_MATCHING_SHORTLIST", () => {
+    const items = [
+      item({
+        id: "d5",
+        title: "D5",
+        meta: { trainNo: "D5", seatClass: "二等座" },
+      }),
+    ];
+    const r = pickShortlistItem(items, { preferredTrains: ["G1~G9"] });
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.equal(r.code, "NO_MATCHING_SHORTLIST");
+  });
+
+  it("NEG: 1380 not in numeric price range 380~500", () => {
+    const items = [
+      item({
+        id: "t1380",
+        title: "1380",
+        channel: "show",
+        meta: { tier: "1380" },
+      }),
+    ];
+    const r = pickShortlistItem(items, { preferredTiers: ["380~500"] });
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.equal(r.code, "NO_MATCHING_SHORTLIST");
+  });
+
+  it("POS: 380 in numeric price range 380~580", () => {
+    const items = [
+      item({
+        id: "t380",
+        title: "380",
+        channel: "show",
+        meta: { tier: "380" },
+      }),
+      item({
+        id: "t1380",
+        title: "1380",
+        channel: "show",
+        meta: { tier: "1380" },
+      }),
+    ];
+    const r = pickShortlistItem(items, { preferredTiers: ["380~580"] });
+    assert.equal(r.ok, true);
+    if (r.ok) assert.equal(r.item.id, "t380");
+  });
 });
 
 describe("pref normalize / fuzzy detection", () => {
@@ -306,6 +390,13 @@ describe("pref normalize / fuzzy detection", () => {
     assert.equal(isExplicitFuzzyOrRangePref("G1*"), true);
     assert.equal(isExplicitFuzzyOrRangePref("280-580"), true);
     assert.equal(isExplicitFuzzyOrRangePref("G1~G9"), true);
+  });
+
+  it("parseTrainLikeCode splits prefix + number", () => {
+    assert.deepEqual(parseTrainLikeCode("G10"), { prefix: "G", num: 10 });
+    assert.deepEqual(parseTrainLikeCode("g5"), { prefix: "G", num: 5 });
+    assert.equal(parseTrainLikeCode("380"), null);
+    assert.equal(parseTrainLikeCode("G1~G9"), null);
   });
 });
 

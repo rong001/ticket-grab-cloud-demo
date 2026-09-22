@@ -28,6 +28,17 @@ function looksWeak(secret: string, denylist: string[]): boolean {
   return false;
 }
 
+
+/** Parse CORS_ORIGIN as a comma-separated allowlist (trim, drop empty). Never returns "*". */
+export function parseCorsOriginAllowlist(raw: string | undefined | null): string[] {
+  const s = String(raw ?? "").trim();
+  if (!s || s === "*") return [];
+  return s
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0 && part !== "*");
+}
+
 /** Fail hard in production when secrets are still defaults / weak. */
 export function assertProductionSecrets(nodeEnv: string, jwtSecret: string, encryptionKey: string) {
   if (nodeEnv !== "production") return;
@@ -61,21 +72,20 @@ export const env = {
   redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379",
   jwtSecret,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
-  /** Comma-separated list of allowed web origins. */
-  corsOrigin: (process.env.CORS_ORIGIN ?? "http://localhost:3000")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean),
+  /**
+   * Allowed browser Origins parsed from CORS_ORIGIN (comma-separated allowlist).
+   * Fastify CORS must return a single matching origin string — never the comma-joined env value.
+   */
+  corsOrigins: (() => {
+    const list = parseCorsOriginAllowlist(process.env.CORS_ORIGIN);
+    return list.length ? list : ["http://localhost:3000"];
+  })(),
   providerMode: (process.env.PROVIDER_MODE as "live" | "fixture") ?? "fixture",
   /** Public web origin for in-product checkout / payment handoff links. */
-  webBaseUrl: process.env.WEB_BASE_URL ?? process.env.CORS_ORIGIN ?? "http://localhost:3000",
+  webBaseUrl:
+    process.env.WEB_BASE_URL ??
+    parseCorsOriginAllowlist(process.env.CORS_ORIGIN)[0] ??
+    "http://localhost:3000",
   /** AES key material for session cookies / traveler IDs. Empty = plain: prefix (dev only). */
   encryptionKey,
-  /** Public self-register for ToC. Default ON; set ALLOW_PUBLIC_REGISTER=0 to disable.
-   *  Read at request time so tests can flip the flag after module load. */
-  get allowPublicRegister() {
-    const v = process.env.ALLOW_PUBLIC_REGISTER;
-    if (v === undefined || v === "") return true;
-    return v !== "0" && v.toLowerCase() !== "false";
-  },
 };

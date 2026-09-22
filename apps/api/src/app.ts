@@ -96,7 +96,23 @@ export async function buildApp() {
           },
   });
 
-  await app.register(cors, { origin: env.corsOrigin, credentials: true });
+  // Echo a SINGLE matching Origin from the allowlist (never the raw comma-joined CORS_ORIGIN).
+  await app.register(cors, {
+    credentials: true,
+    origin(origin, cb) {
+      const allowlist = env.corsOrigins;
+      if (!origin) {
+        // Non-browser / same-origin requests may omit Origin — allow without ACAO echo.
+        cb(null, false);
+        return;
+      }
+      if (allowlist.includes(origin)) {
+        cb(null, origin);
+        return;
+      }
+      cb(null, false);
+    },
+  });
 
   // Fastify 5 rejects empty bodies with Content-Type: application/json (common on DELETE).
   app.addContentTypeParser(

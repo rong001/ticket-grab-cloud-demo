@@ -1,78 +1,298 @@
+
+> @ticket-grab/api@1.0.0 test:watch-draft-correctness /workspace/ticket-grab-cloud/apps/api
+> CORS_ORIGIN='https://159.75.71.192:18444,https://159.75.71.192:18090' PROVIDER_MODE=fixture BOOKING_STUB=0 ALLOW_PUBLIC_REGISTER=1 node --import tsx --test src/lib/pickShortlistItem.test.ts src/cors-origin.smoke.test.ts src/watch-draft-correctness.smoke.test.ts && node --import tsx --test ../web/src/lib/orderGate.test.ts
+
 TAP version 13
+# Subtest: parseCorsOriginAllowlist
+    # Subtest: splits comma list, trims, drops empty
+    ok 1 - splits comma list, trims, drops empty
+      ---
+      duration_ms: 1.62218
+      ...
+    # Subtest: rejects bare * and empty
+    ok 2 - rejects bare * and empty
+      ---
+      duration_ms: 0.172039
+      ...
+    1..2
+ok 1 - parseCorsOriginAllowlist
+  ---
+  duration_ms: 2.718126
+  type: 'suite'
+  ...
+# Subtest: CORS single matching Origin header
+    # Subtest: Origin 18444 → ACAO exactly that one URL (never comma-joined)
+    ok 1 - Origin 18444 → ACAO exactly that one URL (never comma-joined)
+      ---
+      duration_ms: 15.968267
+      ...
+    # Subtest: Origin 18090 → ACAO exactly that one URL
+    ok 2 - Origin 18090 → ACAO exactly that one URL
+      ---
+      duration_ms: 1.245476
+      ...
+    # Subtest: unknown Origin → no / false ACAO (not comma-joined allowlist)
+    ok 3 - unknown Origin → no / false ACAO (not comma-joined allowlist)
+      ---
+      duration_ms: 2.920685
+      ...
+    1..3
+ok 2 - CORS single matching Origin header
+  ---
+  duration_ms: 970.609955
+  type: 'suite'
+  ...
 # Subtest: pickShortlistItem strict prefs
     # Subtest: returns SHORTLIST_EMPTY for empty list
     ok 1 - returns SHORTLIST_EMPTY for empty list
+      ---
+      duration_ms: 1.514671
+      ...
     # Subtest: does not silently pick sold_out when no available/limited
     ok 2 - does not silently pick sold_out when no available/limited
+      ---
+      duration_ms: 0.23301
+      ...
     # Subtest: preferred train with no match → NO_MATCHING_SHORTLIST
     ok 3 - preferred train with no match → NO_MATCHING_SHORTLIST
+      ---
+      duration_ms: 0.598249
+      ...
     # Subtest: preferred seat with no match → NO_MATCHING_SHORTLIST
     ok 4 - preferred seat with no match → NO_MATCHING_SHORTLIST
+      ---
+      duration_ms: 0.38973
+      ...
     # Subtest: preferred tier with no match → NO_MATCHING_SHORTLIST
     ok 5 - preferred tier with no match → NO_MATCHING_SHORTLIST
+      ---
+      duration_ms: 0.211145
+      ...
     # Subtest: matching preferred train returns that item (no silent broaden)
     ok 6 - matching preferred train returns that item (no silent broaden)
+      ---
+      duration_ms: 0.254478
+      ...
     # Subtest: explicit selectedId still works even if sold_out
     ok 7 - explicit selectedId still works even if sold_out
+      ---
+      duration_ms: 0.127829
+      ...
     # Subtest: prefers non-scheduleOnly when both match
     ok 8 - prefers non-scheduleOnly when both match
+      ---
+      duration_ms: 0.227848
+      ...
     # Subtest: NEG: preferred G1 must NOT match pool G10/G100 (no substring)
     ok 9 - NEG: preferred G1 must NOT match pool G10/G100 (no substring)
+      ---
+      duration_ms: 0.291293
+      ...
     # Subtest: POS: preferred G10 selects exact G10 in pool
     ok 10 - POS: preferred G10 selects exact G10 in pool
+      ---
+      duration_ms: 0.3389
+      ...
     # Subtest: NEG: preferred 380 must NOT match tier 1380 (no substring)
     ok 11 - NEG: preferred 380 must NOT match tier 1380 (no substring)
+      ---
+      duration_ms: 0.224197
+      ...
     # Subtest: POS: preferred 380 selects exact tier 380
     ok 12 - POS: preferred 380 selects exact tier 380
+      ---
+      duration_ms: 0.156906
+      ...
+    # Subtest: POS: preferred 380 matches whole-token in '看台 380' but not '看台 1380'
+    ok 13 - POS: preferred 380 matches whole-token in '看台 380' but not '看台 1380'
+      ---
+      duration_ms: 0.233432
+      ...
     # Subtest: missing structured trainNo → cannot match via title substring
     ok 14 - missing structured trainNo → cannot match via title substring
+      ---
+      duration_ms: 0.124893
+      ...
     # Subtest: explicit fuzzy glob G1* matches G10/G100 when pref contains *
     ok 15 - explicit fuzzy glob G1* matches G10/G100 when pref contains *
+      ---
+      duration_ms: 0.352721
+      ...
     # Subtest: explicit numeric tier range 300-400 matches 380 only
     ok 16 - explicit numeric tier range 300-400 matches 380 only
-ok 1 - pickShortlistItem strict prefs
+      ---
+      duration_ms: 0.530067
+      ...
+    # Subtest: NEG: preferred G1~G9 must NOT match pool G10/G100 (numeric range, not lex)
+    ok 17 - NEG: preferred G1~G9 must NOT match pool G10/G100 (numeric range, not lex)
+      ---
+      duration_ms: 0.275527
+      ...
+    # Subtest: POS: preferred G1~G9 matches G5 (numeric train range)
+    ok 18 - POS: preferred G1~G9 matches G5 (numeric train range)
+      ---
+      duration_ms: 0.407871
+      ...
+    # Subtest: NEG: different train prefix in range → NO_MATCHING_SHORTLIST
+    ok 19 - NEG: different train prefix in range → NO_MATCHING_SHORTLIST
+      ---
+      duration_ms: 0.183493
+      ...
+    # Subtest: NEG: 1380 not in numeric price range 380~500
+    ok 20 - NEG: 1380 not in numeric price range 380~500
+      ---
+      duration_ms: 0.140725
+      ...
+    # Subtest: POS: 380 in numeric price range 380~580
+    ok 21 - POS: 380 in numeric price range 380~580
+      ---
+      duration_ms: 0.297137
+      ...
+    1..21
+ok 3 - pickShortlistItem strict prefs
   ---
+  duration_ms: 8.880045
+  type: 'suite'
   ...
 # Subtest: pref normalize / fuzzy detection
     # Subtest: normalizeTrainNo uppercases
     ok 1 - normalizeTrainNo uppercases
+      ---
+      duration_ms: 0.144792
+      ...
     # Subtest: exactTokenEquals does not substring
     ok 2 - exactTokenEquals does not substring
+      ---
+      duration_ms: 0.090178
+      ...
     # Subtest: bare G1 is not fuzzy; G1* and 280-580 are
     ok 3 - bare G1 is not fuzzy; G1* and 280-580 are
-ok 2 - pref normalize / fuzzy detection
+      ---
+      duration_ms: 0.069277
+      ...
+    # Subtest: parseTrainLikeCode splits prefix + number
+    ok 4 - parseTrainLikeCode splits prefix + number
+      ---
+      duration_ms: 1.104232
+      ...
+    1..4
+ok 4 - pref normalize / fuzzy detection
   ---
+  duration_ms: 1.56697
+  type: 'suite'
   ...
 # Subtest: watchDraftFingerprint
     # Subtest: is order-independent for traveler set
     ok 1 - is order-independent for traveler set
+      ---
+      duration_ms: 0.158442
+      ...
     # Subtest: sameTravelerIdSet ignores order
     ok 2 - sameTravelerIdSet ignores order
-ok 3 - watchDraftFingerprint
+      ---
+      duration_ms: 0.133261
+      ...
+    1..2
+ok 5 - watchDraftFingerprint
   ---
+  duration_ms: 0.503813
+  type: 'suite'
   ...
 # Subtest: watch-draft-correctness
     # Subtest: register primary + other user + travelers
     ok 1 - register primary + other user + travelers
+      ---
+      duration_ms: 275.725776
+      ...
     # Subtest: preferred train with no match → 400 NO_MATCHING_SHORTLIST; no order
     ok 2 - preferred train with no match → 400 NO_MATCHING_SHORTLIST; no order
+      ---
+      duration_ms: 66.068448
+      ...
     # Subtest: preferred seat with no match → 400 NO_MATCHING_SHORTLIST
     ok 3 - preferred seat with no match → 400 NO_MATCHING_SHORTLIST
+      ---
+      duration_ms: 33.026666
+      ...
     # Subtest: sold-out-only shortlist → 400; does not pick sold_out as success
     ok 4 - sold-out-only shortlist → 400; does not pick sold_out as success
+      ---
+      duration_ms: 30.864394
+      ...
     # Subtest: concurrent create-order → exactly ONE draft for same combo
     ok 5 - concurrent create-order → exactly ONE draft for same combo
+      ---
+      duration_ms: 134.149821
+      ...
     # Subtest: NEG substring: preferred G1 vs pool G10/G100 → 400; no draft
     ok 6 - NEG substring: preferred G1 vs pool G10/G100 → 400; no draft
+      ---
+      duration_ms: 25.551361
+      ...
+    # Subtest: NEG range numeric: preferred G1~G9 vs pool G10/G100 → 400; no draft
+    ok 7 - NEG range numeric: preferred G1~G9 vs pool G10/G100 → 400; no draft
+      ---
+      duration_ms: 24.735256
+      ...
     # Subtest: NEG substring: preferred 380 vs pool 1380 → 400; no draft
-    ok 7 - NEG substring: preferred 380 vs pool 1380 → 400; no draft
+    ok 8 - NEG substring: preferred 380 vs pool 1380 → 400; no draft
+      ---
+      duration_ms: 24.509854
+      ...
     # Subtest: >20 other fingerprint drafts do not prevent target reuse
-    ok 8 - >20 other fingerprint drafts do not prevent target reuse
-ok 4 - watch-draft-correctness
+    ok 9 - >20 other fingerprint drafts do not prevent target reuse
+      ---
+      duration_ms: 104.66342
+      ...
+    1..9
+ok 6 - watch-draft-correctness
   ---
+  duration_ms: 1152.427395
+  type: 'suite'
   ...
-1..4
-# tests 29
-# suites 4
-# pass 29
+1..6
+# tests 41
+# suites 6
+# pass 41
 # fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2112.072943
+TAP version 13
+# Subtest: orderGate mapping
+    # Subtest: keeps FLIGHT_INVENTORY_UNAVAILABLE (does not collapse to SHOW)
+    ok 1 - keeps FLIGHT_INVENTORY_UNAVAILABLE (does not collapse to SHOW)
+      ---
+      duration_ms: 0.765342
+      ...
+    # Subtest: maps SHOW and TRAIN codes distinctly
+    ok 2 - maps SHOW and TRAIN codes distinctly
+      ---
+      duration_ms: 0.1841
+      ...
+    # Subtest: generic 403 is not a purchase gate
+    ok 3 - generic 403 is not a purchase gate
+      ---
+      duration_ms: 0.168817
+      ...
+    # Subtest: explicit gate codes from ApiError map correctly
+    ok 4 - explicit gate codes from ApiError map correctly
+      ---
+      duration_ms: 0.275122
+      ...
+    1..4
+ok 1 - orderGate mapping
+  ---
+  duration_ms: 2.439374
+  type: 'suite'
+  ...
+1..1
+# tests 4
+# suites 1
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 320.694005

@@ -59,6 +59,22 @@ function globMatch(pattern: string, value: string): boolean {
   return new RegExp(`^${esc}$`).test(value);
 }
 
+/** Parse train-like codes: letter prefix + numeric suffix (e.g. G1, G10, D2287). */
+export function parseTrainLikeCode(
+  raw: string
+): { prefix: string; num: number } | null {
+  const m = /^([A-Za-z]+)(\d+)$/.exec(normalizePrefToken(raw));
+  if (!m) return null;
+  return { prefix: m[1]!.toUpperCase(), num: Number(m[2]) };
+}
+
+/**
+ * Range match for explicit prefs like `G1~G9` or `380~580`.
+ * - Pure numeric (price/tier): numeric compare (380~580 includes 380; 1380 not in 380~500).
+ * - Train-like codes: require **same letter prefix** + **numeric** compare of the number part
+ *   (G1~G9 matches G5; must NOT match G10/G100 via lexicographic string order).
+ * - Different prefixes or unparseable sides → no match (unsupported).
+ */
 function rangeMatch(pref: string, value: string): boolean {
   const t = normalizePrefToken(pref);
   const parts = t.split(/[-~～到至]/).map((p) => p.trim()).filter(Boolean);
@@ -70,11 +86,17 @@ function rangeMatch(pref: string, value: string): boolean {
     const n = Number(value);
     return n >= Number(lo) && n <= Number(hi);
   }
-  // Lexicographic train-code range (same prefix letter)
-  const v = value.toUpperCase();
-  const a = lo.toUpperCase();
-  const b = hi.toUpperCase();
-  return v >= a && v <= b;
+  // Train-like codes: same prefix + numeric number-part compare (never lexicographic).
+  const loT = parseTrainLikeCode(lo);
+  const hiT = parseTrainLikeCode(hi);
+  if (!loT || !hiT) return false; // unparseable range → reject
+  if (loT.prefix !== hiT.prefix) return false; // different prefixes in range → reject
+  const vT = parseTrainLikeCode(value);
+  if (!vT) return false;
+  if (vT.prefix !== loT.prefix) return false; // different prefix vs value → reject
+  const min = Math.min(loT.num, hiT.num);
+  const max = Math.max(loT.num, hiT.num);
+  return vT.num >= min && vT.num <= max;
 }
 
 /**
