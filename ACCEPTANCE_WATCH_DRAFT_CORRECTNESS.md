@@ -34,12 +34,21 @@ cd apps/api && pnpm run test:watch-draft-correctness
 
 ## Commit SHAs
 
-- Private: _(stamp after commit)_
-- Public demo: _(stamp after commit)_
+- Private: 
+- Public demo:  — https://github.com/rong001/ticket-grab-cloud-demo/commit/22cbe7a7b1b1458d7825068490bd485f2b1056b1
 
 ## Live evidence
+## Live evidence
 
-_(fill after deploy)_
+-  → , , , , 
+- Host  still 
+- Synthetic register (emailFp ) → 2 travelers (hints  / )
+- Watch with  →  → **400** （无符合项，须用户重新选择）；no order created
+- Parallel create-order (3× Promise/ThreadPool) on matching watch → **unique_order_ids=1**; responses  +  ×2
+- Order detail: status , 2 travelers; submit → **403** ; after refresh / =  (UI maps explicit code only)
+- UI HTTP 200: , , , 
+- Commerce :443 still responds (untouched lineage)
+
 
 ## Channel stop-at-acceptance
 
