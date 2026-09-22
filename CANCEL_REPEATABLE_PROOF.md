@@ -2,7 +2,7 @@
 
 **Measured (UTC):** 2026-09-22T06:46:49Z → 2026-09-22T06:53:02Z  
 **Private SHA:** `26be33d81cd4db54515a987e0fd38e25f0f6c664`  
-**Public demo SHA:** `8571ca9971306379e44a2e3fe6b44f8cbdcb1a6d`  
+**Public demo SHA:** `b144bbc6ef87c53286f9760f928319f473a5c4ee`  
 **Live:** https://159.75.71.192:18444  
 **Wait after cancel:** **330s** (≥ full next 5-minute window)  
 **Machine timeline:** [`CANCEL_REPEATABLE_PROOF_TIMELINE.json`](./CANCEL_REPEATABLE_PROOF_TIMELINE.json)
