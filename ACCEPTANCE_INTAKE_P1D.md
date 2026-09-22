@@ -155,5 +155,5 @@ Monitor + official 大麦/猫眼 redirect only; never auto-purchase.
 - **整体对话入单验收: 未通过**
 
 ## Commits
-- Public demo: _(filled after push)_
-- Private: _(filled after push)_
+- Public demo: `5a6a0eaec7067fd4288bd171ec8db18be2b398bb` — https://github.com/rong001/ticket-grab-cloud-demo/commit/5a6a0eaec7067fd4288bd171ec8db18be2b398bb
+- Private: `e3ef4e0a772667a24652a57a337e7210ff519510` — https://github.com/rong001/ticket-grab-cloud/commit/e3ef4e0a772667a24652a57a337e7210ff519510
