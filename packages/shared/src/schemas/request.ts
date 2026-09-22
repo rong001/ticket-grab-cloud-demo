@@ -85,6 +85,8 @@ export const watchRequestSchema = z.object({
   /** Assistive auto-create awaiting_login order — never silent paid bypass */
   autoOrder: z.boolean().optional().default(false),
   preferences: watchPreferencesSchema,
+  /** Saved traveler IDs bound to this watch/grab task (train-first multi-pax). */
+  travelerIds: z.array(z.string().min(1).max(64)).max(9).optional(),
 });
 
 export type CreateRequestInput = z.infer<typeof createRequestSchema>;

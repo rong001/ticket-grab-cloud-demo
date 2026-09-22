@@ -56,7 +56,7 @@ describe("order state machine", () => {
 
 describe("traveler validation", () => {
   it("accepts 18-digit id card", () => {
-    const r = validateTravelerIdNumber("id_card", "11010519900307401X");
+    const r = validateTravelerIdNumber("id_card", "110105199003074018");
     assert.equal(r.ok, true);
   });
 
@@ -66,14 +66,14 @@ describe("traveler validation", () => {
   });
 
   it("hints last 4", () => {
-    assert.equal(idNumberHint("11010519900307401X"), "****401X");
+    assert.equal(idNumberHint("110105199003074018"), "****4018");
   });
 
   it("parses create traveler schema", () => {
     const t = createTravelerSchema.parse({
       name: "张三",
       idType: "id_card",
-      idNumber: "11010519900307401X",
+      idNumber: "110105199003074018",
       phone: "13800138000",
       type: "adult",
     });
@@ -83,7 +83,7 @@ describe("traveler validation", () => {
 
 describe("booking adapters (honest)", () => {
   const travelers = [
-    { id: "t1", name: "张三", idType: "id_card", idNumberHint: "****401X", type: "adult" as const },
+    { id: "t1", name: "张三", idType: "id_card", idNumberHint: "****4018", type: "adult" as const },
   ];
   const item = { id: "i1", channel: "train" as const, title: "G100", availability: "available" as const, price: 100 };
 
@@ -166,7 +166,7 @@ describe("booking adapters (honest)", () => {
 
 describe("show / flight booking adapters (parity)", () => {
   const travelers = [
-    { id: "t1", name: "李四", idType: "id_card", idNumberHint: "****401X", type: "adult" as const },
+    { id: "t1", name: "李四", idType: "id_card", idNumberHint: "****4018", type: "adult" as const },
   ];
 
   it("show sold_out + stub → 候补中 with STUB-SHOW-", async () => {

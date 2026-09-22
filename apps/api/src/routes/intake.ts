@@ -13,6 +13,7 @@ import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../lib/auth.js";
 import { logActivity } from "../lib/activity.js";
 import { getWatchQueue, getRedis, type WatchJobPayload } from "../lib/queue.js";
+import { resolveTravelerIdsForUser, travelerSummariesForIds } from "../lib/travelers.js";
 
 const SESSION_TTL_SEC = 60 * 60; // 1h
 const KEY = (id: string) => `intake:session:${id}`;
@@ -127,6 +128,7 @@ export async function intakeRoutes(app: FastifyInstance) {
       sessionId?: string;
       confirmed?: boolean;
       intervalMinutes?: number;
+      travelerIds?: string[];
     };
     if (body.confirmed !== true) {
       return reply.code(400).send({ error: "confirmed must be true" });
@@ -153,11 +155,32 @@ export async function intakeRoutes(app: FastifyInstance) {
       notes: payload.notes,
     });
 
+    const fieldsObj = { ...(parsed.fields as Record<string, unknown>) };
+    const passengersHint =
+      typeof fieldsObj.passengers === "number"
+        ? fieldsObj.passengers
+        : typeof fieldsObj.quantity === "number"
+          ? fieldsObj.quantity
+          : null;
+    const bind = await resolveTravelerIdsForUser({
+      userId: user.sub,
+      travelerIds: body.travelerIds,
+      passengers: passengersHint,
+    });
+    if (!bind.ok) return reply.code(bind.status).send({ error: bind.error });
+    if (bind.travelerIds.length && bind.passengers != null) {
+      if (parsed.channel === "show") {
+        fieldsObj.quantity = bind.passengers;
+      } else {
+        fieldsObj.passengers = bind.passengers;
+      }
+    }
+
     const created = await prisma.ticketRequest.create({
       data: {
         userId: user.sub,
         channel: parsed.channel,
-        fields: parsed.fields as object,
+        fields: fieldsObj as object,
         notifyOnly: true,
         notes: parsed.notes,
       },
@@ -184,6 +207,7 @@ export async function intakeRoutes(app: FastifyInstance) {
         nextRunAt,
         autoOrder: false,
         preferences: (watchBody.preferences ?? null) as object | undefined,
+        travelerIds: bind.travelerIds,
         statusReason: "Created from conversational intake confirmation",
         statusChangedAt: new Date(),
       },
@@ -225,10 +249,12 @@ export async function intakeRoutes(app: FastifyInstance) {
     // Clear session so confirm is not replayed
     await getRedis().del(KEY(body.sessionId));
 
+    const travelers = await travelerSummariesForIds(user.sub, bind.travelerIds);
     return reply.code(201).send({
       request: created,
-      watchJob,
+      watchJob: { ...watchJob, travelerIds: bind.travelerIds, travelers },
       confirmation: card,
+      travelers,
       message: "盯票任务已创建（监控+通知）。未授权自动购票。",
     });
   });

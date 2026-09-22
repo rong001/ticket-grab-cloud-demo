@@ -211,3 +211,24 @@ export async function hasWatchRepeatable(watchJobId: string): Promise<boolean> {
   }
   return false;
 }
+
+
+/** Test / shutdown helper — close BullMQ queue + shared Redis so Node can exit. */
+export async function closeQueueConnections(): Promise<void> {
+  try {
+    if (watchQueue) {
+      await watchQueue.close();
+      watchQueue = null;
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (connection) {
+      connection.disconnect();
+      connection = null;
+    }
+  } catch {
+    /* ignore */
+  }
+}

@@ -23,7 +23,7 @@ type Item = {
   meta?: Record<string, unknown>;
 };
 
-type Traveler = { id: string; name: string; idNumberHint?: string; type: string };
+type Traveler = { id: string; name: string; idNumberHint?: string; type: string; relationship?: string };
 
 type EventRow = {
   id: string;
@@ -185,6 +185,7 @@ export default function RequestDetailPage() {
   const [wizardPhase, setWizardPhase] = useState<WizardPhase>(null);
   const [selectedSeat, setSelectedSeat] = useState("");
   const [selectedTravelers, setSelectedTravelers] = useState<string[]>([]);
+  const [watchTravelerIds, setWatchTravelerIds] = useState<string[]>([]);
   const [preferredPlatform, setPreferredPlatform] = useState<"damai" | "maoyan">("damai");
   const [channelBadge, setChannelBadge] = useState<{ labelZh: string; badge: string } | null>(null);
   const [watchHint, setWatchHint] = useState("");
@@ -301,6 +302,7 @@ export default function RequestDetailPage() {
       };
       if (endsAtLocal) payload.endsAt = new Date(endsAtLocal).toISOString();
       if (startsAtLocal) payload.startsAt = new Date(startsAtLocal).toISOString();
+      if (watchTravelerIds.length) payload.travelerIds = watchTravelerIds;
       await api(`/requests/${id}/watch`, {
         method: "POST",
         body: JSON.stringify(payload),
@@ -458,6 +460,13 @@ export default function RequestDetailPage() {
         preferredTiers={preferredTiers}
         onPreferredTiersChange={setPreferredTiers}
         watchHint={watchHint}
+        travelerOptions={travelers}
+        selectedTravelerIds={watchTravelerIds}
+        onToggleTraveler={(tid) =>
+          setWatchTravelerIds((prev) =>
+            prev.includes(tid) ? prev.filter((x) => x !== tid) : [...prev, tid]
+          )
+        }
         onStart={startWatch}
         onSearch={runSearch}
         onCancel={cancelWatch}

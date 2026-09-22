@@ -11,6 +11,8 @@ type Traveler = {
   idNumberHint?: string;
   phone?: string;
   type: string;
+  relationship?: string;
+  authorizedConsent?: boolean;
 };
 
 const ID_TYPE_LABEL: Record<string, string> = {
@@ -25,6 +27,8 @@ export default function TravelersPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [relationship, setRelationship] = useState<"self" | "authorized">("self");
+  const [consent, setConsent] = useState(false);
 
   const load = useCallback(() => {
     if (!getToken()) {
@@ -55,9 +59,13 @@ export default function TravelersPage() {
           idNumber: fd.get("idNumber"),
           phone: fd.get("phone") || undefined,
           type: fd.get("type") || "adult",
+          relationship,
+          authorizedConsent: relationship === "authorized" ? consent : false,
         }),
       });
       (e.target as HTMLFormElement).reset();
+      setRelationship("self");
+      setConsent(false);
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
@@ -77,7 +85,9 @@ export default function TravelersPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">乘车人</h1>
-          <p className="lead">证件号加密存储，列表仅显示尾号。</p>
+          <p className="lead">
+            证件号加密存储，列表仅显示尾号。代购须勾选授权同意。绑定到盯票任务后可多乘客抢票（正式下单仍受门禁限制）。
+          </p>
         </div>
       </div>
 
@@ -110,14 +120,41 @@ export default function TravelersPage() {
             </div>
             <div>
               <label>证件号</label>
-              <input name="idNumber" required placeholder="18 位身份证" />
+              <input name="idNumber" required placeholder="18 位身份证（校验位校验）" />
             </div>
           </div>
           <div>
             <label>手机（可选）</label>
             <input name="phone" placeholder="13800138000" />
           </div>
-          <button type="submit" disabled={busy}>
+          <div className="row">
+            <div>
+              <label>与本人关系</label>
+              <select
+                value={relationship}
+                onChange={(e) => {
+                  const v = e.target.value as "self" | "authorized";
+                  setRelationship(v);
+                  if (v === "self") setConsent(false);
+                }}
+              >
+                <option value="self">本人</option>
+                <option value="authorized">代购（已获授权）</option>
+              </select>
+            </div>
+          </div>
+          {relationship === "authorized" && (
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={consent}
+                onChange={(e) => setConsent(e.target.checked)}
+                required
+              />
+              <span>我确认已获得该乘车人授权，仅用于本人协助购票，证件信息加密存储。</span>
+            </label>
+          )}
+          <button type="submit" disabled={busy || (relationship === "authorized" && !consent)}>
             {busy ? "保存中…" : "保存"}
           </button>
         </form>
@@ -129,7 +166,7 @@ export default function TravelersPage() {
         {loaded && !rows.length && (
           <div className="empty" style={{ padding: "2rem 1rem" }}>
             <p className="empty-title">暂无乘车人</p>
-            <p className="empty-desc">添加后可在下单时一键选择。</p>
+            <p className="empty-desc">添加后可在对话建单确认或定时抢票时多选绑定。</p>
           </div>
         )}
         {rows.map((t) => (
@@ -138,6 +175,9 @@ export default function TravelersPage() {
               <div>
                 <span className="item-title">{t.name}</span>{" "}
                 <span className="badge">{t.type === "child" ? "儿童" : "成人"}</span>
+                <span className="badge" style={{ marginLeft: 4 }}>
+                  {t.relationship === "authorized" ? "代购" : "本人"}
+                </span>
                 <div className="meta" style={{ marginTop: "0.25rem" }}>
                   {ID_TYPE_LABEL[t.idType] ?? t.idType} · {t.idNumberHint ?? "****"}
                   {t.phone ? ` · ${t.phone}` : ""}

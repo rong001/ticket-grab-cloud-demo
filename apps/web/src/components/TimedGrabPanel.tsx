@@ -4,6 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { formatShanghaiDateTime } from "@/lib/format";
 import Link from "next/link";
 
+export type TravelerOption = {
+  id: string;
+  name: string;
+  idNumberHint?: string;
+  relationship?: string;
+  type?: string;
+};
+
 export type WatchJobRow = {
   id: string;
   status: string;
@@ -13,6 +21,8 @@ export type WatchJobRow = {
   autoOrder?: boolean;
   nextRunAt?: string | null;
   lastRunAt?: string | null;
+  travelerIds?: string[];
+  travelers?: TravelerOption[];
   preferences?: {
     preferredTrains?: string[];
     preferredSeats?: string[];
@@ -44,6 +54,10 @@ type Props = {
   preferredTiers?: string;
   onPreferredTiersChange?: (v: string) => void;
   watchHint?: string;
+  /** Optional multi-select of saved travelers to bind on watch create */
+  travelerOptions?: TravelerOption[];
+  selectedTravelerIds?: string[];
+  onToggleTraveler?: (id: string) => void;
   onStart: () => void;
   onSearch: () => void;
   onCancel?: (jobId: string) => void;
@@ -178,6 +192,35 @@ export default function TimedGrabPanel(props: Props) {
           </div>
         )}
 
+        {props.travelerOptions && props.onToggleTraveler && (
+          <div>
+            <label>绑定乘车人 / 观演人（可选，多选）</label>
+            {!props.travelerOptions.length ? (
+              <p className="muted" style={{ margin: "0.25rem 0" }}>
+                暂无已保存人员 — <Link href="/travelers">去添加</Link>
+              </p>
+            ) : (
+              <div className="chip-row" style={{ flexWrap: "wrap" }}>
+                {props.travelerOptions.map((t) => {
+                  const on = props.selectedTravelerIds?.includes(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={on ? "date-chip active" : "date-chip"}
+                      onClick={() => props.onToggleTraveler?.(t.id)}
+                    >
+                      {t.name}
+                      {t.idNumberHint ? ` · ${t.idNumberHint}` : ""}
+                      {t.relationship === "authorized" ? " · 代购" : ""}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         <label className="check-row">
           <input
             type="checkbox"
@@ -276,6 +319,11 @@ export default function TimedGrabPanel(props: Props) {
                   {j.preferences?.preferredTiers?.length
                     ? ` · 票档 ${j.preferences.preferredTiers.join(",")}`
                     : ""}
+                  {j.travelers?.length
+                    ? ` · 乘客 ${j.travelers.map((t) => t.name).join("、")}`
+                    : j.travelerIds?.length
+                      ? ` · ${j.travelerIds.length} 人`
+                      : ""}
                   <div className="meta">
                     {j.startsAt ? `起 ${formatShanghaiDateTime(j.startsAt)} · ` : ""}
                     {j.nextRunAt ? `下次 ${formatShanghaiDateTime(j.nextRunAt)}` : ""}

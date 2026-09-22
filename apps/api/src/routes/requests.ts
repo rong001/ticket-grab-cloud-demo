@@ -10,6 +10,7 @@ import { authenticate } from "../lib/auth.js";
 import { logActivity } from "../lib/activity.js";
 import { getWatchQueue, removeWatchRepeatable, hasWatchRepeatable, type WatchJobPayload } from "../lib/queue.js";
 import { env } from "../env.js";
+import { resolveTravelerIdsForUser, travelerSummariesForIds } from "../lib/travelers.js";
 
 export async function requestRoutes(app: FastifyInstance) {
   app.post("/requests", {
@@ -106,6 +107,8 @@ export async function requestRoutes(app: FastifyInstance) {
         } catch {
           repeatableArmed = false;
         }
+        const travelerIds = (j as { travelerIds?: string[] }).travelerIds ?? [];
+        const travelers = await travelerSummariesForIds(user.sub, travelerIds);
         return {
           id: j.id,
           requestId: j.requestId,
@@ -117,6 +120,8 @@ export async function requestRoutes(app: FastifyInstance) {
           endsAt: j.endsAt ?? null,
           autoOrder: j.autoOrder,
           preferences: j.preferences ?? null,
+          travelerIds,
+          travelers,
           lastRunAt: j.lastRunAt ?? null,
           nextRunAt: j.nextRunAt ?? null,
           bullJobId: j.bullJobId ?? null,
@@ -159,7 +164,9 @@ export async function requestRoutes(app: FastifyInstance) {
         } catch {
           repeatableArmed = false;
         }
-        return { ...j, repeatableArmed };
+        const travelerIds = (j as { travelerIds?: string[] }).travelerIds ?? [];
+        const travelers = await travelerSummariesForIds(user.sub, travelerIds);
+        return { ...j, travelerIds, travelers, repeatableArmed };
       })
     );
     return { ...row, watchJobs };
@@ -234,6 +241,28 @@ export async function requestRoutes(app: FastifyInstance) {
       : 0;
     const nextRunAt = new Date(Date.now() + (delayMs || intervalMs));
 
+    const fieldsObj = (row.fields ?? {}) as Record<string, unknown>;
+    const passengersHint =
+      typeof fieldsObj.passengers === "number"
+        ? fieldsObj.passengers
+        : typeof fieldsObj.quantity === "number"
+          ? fieldsObj.quantity
+          : null;
+    const bind = await resolveTravelerIdsForUser({
+      userId: user.sub,
+      travelerIds: body.travelerIds,
+      passengers: body.travelerIds?.length ? passengersHint : null,
+    });
+    // When travelerIds omitted, skip passengers match; when provided, enforce.
+    if (!bind.ok) return reply.code(bind.status).send({ error: bind.error });
+    if (bind.travelerIds.length && passengersHint == null && bind.passengers != null) {
+      const nextFields = { ...fieldsObj, passengers: bind.passengers };
+      await prisma.ticketRequest.update({
+        where: { id: row.id },
+        data: { fields: nextFields as object },
+      });
+    }
+
     const watchJob = await prisma.watchJob.create({
       data: {
         requestId: row.id,
@@ -243,6 +272,7 @@ export async function requestRoutes(app: FastifyInstance) {
         endsAt,
         autoOrder,
         preferences: preferences as object | undefined,
+        travelerIds: bind.travelerIds,
         nextRunAt,
         statusReason: delayMs > 0 ? "Queued until startsAt" : "Queued for first query",
         statusChangedAt: new Date(),
@@ -311,8 +341,10 @@ export async function requestRoutes(app: FastifyInstance) {
       endsAt: endsAt?.toISOString() ?? null,
       startsAt: startsAt?.toISOString() ?? null,
       preferences,
+      travelerIds: bind.travelerIds,
     });
-    return reply.code(201).send(updated);
+    const travelers = await travelerSummariesForIds(user.sub, bind.travelerIds);
+    return reply.code(201).send({ ...updated, travelerIds: bind.travelerIds, travelers });
   });
 
   app.post("/requests/:id/watch/:jobId/cancel", {

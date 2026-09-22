@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, getToken } from "@/lib/api";
+
+type TravelerOpt = {
+  id: string;
+  name: string;
+  idNumberHint?: string;
+  relationship?: string;
+};
 
 type HistoryItem = { role: "user" | "assistant"; text: string };
 type ConfirmLine = { label: string; value: string };
@@ -40,7 +47,20 @@ export default function IntakePage() {
   const [ready, setReady] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [created, setCreated] = useState<{ requestId: string; watchJobId: string } | null>(null);
+  const [travelers, setTravelers] = useState<TravelerOpt[]>([]);
+  const [selectedTravelerIds, setSelectedTravelerIds] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const loadTravelers = useCallback(() => {
+    if (!getToken()) return;
+    api<TravelerOpt[]>("/travelers")
+      .then(setTravelers)
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (ready && confirmation) loadTravelers();
+  }, [ready, confirmation, loadTravelers]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -85,7 +105,11 @@ export default function IntakePage() {
         message?: string;
       }>("/intake/confirm", {
         method: "POST",
-        body: JSON.stringify({ sessionId, confirmed: true }),
+        body: JSON.stringify({
+          sessionId,
+          confirmed: true,
+          ...(selectedTravelerIds.length ? { travelerIds: selectedTravelerIds } : {}),
+        }),
       });
       setCreated({ requestId: res.request.id, watchJobId: res.watchJob.id });
       setReady(false);
@@ -143,6 +167,38 @@ export default function IntakePage() {
           <p className="meta" style={{ marginTop: "0.75rem" }}>
             {confirmation.capabilityNote}
           </p>
+          <div style={{ marginTop: "0.75rem" }}>
+            <label>绑定乘车人 / 观演人（可选）</label>
+            {!getToken() ? (
+              <p className="muted">登录后可选择已保存人员</p>
+            ) : !travelers.length ? (
+              <p className="muted">
+                暂无已保存 — <Link href="/travelers">去添加</Link>
+              </p>
+            ) : (
+              <div className="chip-row" style={{ flexWrap: "wrap", marginTop: "0.35rem" }}>
+                {travelers.map((t) => {
+                  const on = selectedTravelerIds.includes(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={on ? "date-chip active" : "date-chip"}
+                      onClick={() =>
+                        setSelectedTravelerIds((prev) =>
+                          prev.includes(t.id) ? prev.filter((x) => x !== t.id) : [...prev, t.id]
+                        )
+                      }
+                    >
+                      {t.name}
+                      {t.idNumberHint ? ` · ${t.idNumberHint}` : ""}
+                      {t.relationship === "authorized" ? " · 代购" : ""}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <div className="hero-actions" style={{ marginTop: "1rem" }}>
             <button type="button" className="btn-query" disabled={busy} onClick={confirm}>
               确认创建盯票

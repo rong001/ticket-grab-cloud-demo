@@ -49,14 +49,14 @@ describe("in-system ops API smoke", () => {
       payload: {
         name: "测试乘客",
         idType: "id_card",
-        idNumber: "11010519900307401X",
+        idNumber: "110105199003074018",
         phone: "13800138000",
         type: "adult",
       },
     });
     assert.equal(traveler.statusCode, 201, traveler.body);
     travelerId = traveler.json().id as string;
-    assert.ok(traveler.json().idNumberHint?.includes("401X"));
+    assert.ok(traveler.json().idNumberHint?.includes("4018"));
   });
 
   it("train path: search → link → order → submit → handoff", async () => {

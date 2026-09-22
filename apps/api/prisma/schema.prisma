@@ -131,6 +131,8 @@ model WatchJob {
   autoOrder       Boolean        @default(false)
   /// Channel prefs: preferredTrains/seats (train) or preferredTiers/sessions (show); notify flag
   preferences     Json?
+  /// Bound traveler IDs for multi-passenger grab (hints only in API responses)
+  travelerIds     String[]       @default([])
   /// Human-readable reason for latest status transition
   statusReason    String?
   statusChangedAt DateTime?
@@ -174,6 +176,11 @@ model Traveler {
   idNumberHint   String?
   phone          String?
   type           TravelerType @default(adult)
+  /// self = account holder; authorized = consenting third party
+  relationship   String       @default("self")
+  /// Required true when relationship=authorized
+  authorizedConsent Boolean   @default(false)
+  authorizedConsentAt DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
