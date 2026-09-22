@@ -26,8 +26,8 @@
 Monitor + official redirect only; never auto-purchase.
 
 ## Commits
-- Public demo: (fill after push)
-- Private: (fill after push)
+- Public demo: `012450ef99a698c779e873ffc1dce9796ccf3436` — https://github.com/rong001/ticket-grab-cloud-demo/commit/012450ef99a698c779e873ffc1dce9796ccf3436
+- Private: `d5d348f4ad2458486c3c0e74540e810777e34da1` — https://github.com/rong001/ticket-grab-cloud/commit/d5d348f4ad2458486c3c0e74540e810777e34da1
 
 ## Exact user sentence (live measured)
 
