@@ -161,6 +161,12 @@ export async function buildApp() {
   });
 
   app.setErrorHandler((err, _request, reply) => {
+    // Fastify runs route-schema validation before the handler. Without an
+    // explicit mapping these errors fall through to the generic 500 response.
+    const fastifyValidation = err as { code?: string; validation?: unknown };
+    if (fastifyValidation.code === "FST_ERR_VALIDATION" && Array.isArray(fastifyValidation.validation)) {
+      return reply.code(400).send({ error: "Validation failed", validation: fastifyValidation.validation });
+    }
     if (err instanceof ZodError) {
       return reply.code(400).send({ error: "Validation failed", details: err.flatten() });
     }

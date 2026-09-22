@@ -21,6 +21,8 @@ for k in p.split("."):
   o=o[int(k)] if isinstance(o,list) else (o or {}).get(k)
 print("" if o is None else o)' "$1"
 }
+# Public search body shape (POST /public/search):
+# {"channel":"train|show|flight","fields":{...}}
 api() {
   local method="$1" path="$2" body="${3:-}"
   local args=(-sS -X "$method" -H "content-type: application/json" -H "accept: application/json")
