@@ -34,21 +34,20 @@ cd apps/api && pnpm run test:watch-draft-correctness
 
 ## Commit SHAs
 
-- Private: 
-- Public demo:  — https://github.com/rong001/ticket-grab-cloud-demo/commit/22cbe7a7b1b1458d7825068490bd485f2b1056b1
+- Private: `2247f07c6495c84cb23a5046cf8834b24740d441` (docs tip `618a5d937fc35addaa052abe24ab36b1919d65f2`)
+- Public demo: `22cbe7a7b1b1458d7825068490bd485f2b1056b1` — https://github.com/rong001/ticket-grab-cloud-demo/commit/22cbe7a7b1b1458d7825068490bd485f2b1056b1  
+  (docs tip `f98f4b4be73bbc9c4c0dfdbc6217e772e1e0d49d` — https://github.com/rong001/ticket-grab-cloud-demo/commit/f98f4b4be73bbc9c4c0dfdbc6217e772e1e0d49d)
 
 ## Live evidence
-## Live evidence
 
--  → , , , , 
-- Host  still 
-- Synthetic register (emailFp ) → 2 travelers (hints  / )
-- Watch with  →  → **400** （无符合项，须用户重新选择）；no order created
-- Parallel create-order (3× Promise/ThreadPool) on matching watch → **unique_order_ids=1**; responses  +  ×2
-- Order detail: status , 2 travelers; submit → **403** ; after refresh / =  (UI maps explicit code only)
-- UI HTTP 200: , , , 
-- Commerce :443 still responds (untouched lineage)
-
+- `GET /api/health` → `ok=true`, `trainRealSubmit=false`, `bookingStub=false`, `providerMode=live`, `flightInventoryLive=false`
+- Host `.env.production` still `TRAIN_REAL_SUBMIT=0`
+- Synthetic register (emailFp `da0b9991b703`) → 2 travelers (hints `****4018` / `****1237`)
+- Watch with `preferredTrains=["Z9999NOMATCH"]` → `POST /grabs/:id/create-order` → **400** `NO_MATCHING_SHORTLIST`（无符合项，须用户重新选择）; no order created
+- Parallel create-order (3×) on matching watch → **unique_order_ids=1**; responses `(201,reused=false)` + `(200,reused=true)` ×2
+- Order detail: status `draft`, 2 travelers; submit → **403** `TRAIN_REAL_SUBMIT_DISABLED`; after refresh `errorMessage`/`gate.code` = `TRAIN_REAL_SUBMIT_DISABLED` (UI maps explicit code only)
+- UI HTTP 200: `/`, `/grabs`, `/orders/{id}`, `/login`
+- Commerce :443 HTTP 200 (untouched lineage)
 
 ## Channel stop-at-acceptance
 
