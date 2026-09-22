@@ -56,12 +56,20 @@ curl -sS "$BASE/health" | jq '{trainRealSubmit,bookingStub,providerMode}'
 
 ## Commit SHAs
 
-- Private: `(pending stamp)`
-- Public demo: `(pending stamp)`
+- Private: `0ea10fc58529c67e85855257ad5f9fc9197ef65f`
+- Public demo: `5de4d67b04c39486d78c1fa6060957d3af87814b` — https://github.com/rong001/ticket-grab-cloud-demo/commit/5de4d67b04c39486d78c1fa6060957d3af87814b
 
 ## Live evidence
 
-_(filled after deploy)_
+- `GET /api/health` → `ok=true`, `trainRealSubmit=false`, `bookingStub=false`, `providerMode=live`
+- Host `.env.production` still `TRAIN_REAL_SUBMIT=0`
+- UI HTTP 200: `/`, `/grabs`, `/travelers` (title 出行人/观演人)
+- Synthetic register (emailFp `4625363be0db`) → 2 travelers (hints `****4018` / `****1237`; no full ID)
+- Show request quantity=2 → search (4 items) → watch with 2 travelerIds
+- `POST /grabs/:id/create-order` → **201** draft, channel=show, 2 traveler summaries, showAutoBuy=false, nextSteps include 待用户登录官方
+- Second create-order → same orderId, `reused=true`
+- `POST /orders/:id/submit` → **403** `SHOW_AUTO_BUY_UNAVAILABLE`, status remains `draft` (not paid)
+- Commerce :80/:443 untouched
 
 ## Remaining main blocker
 
