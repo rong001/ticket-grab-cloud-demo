@@ -549,6 +549,11 @@ const CN_NUMERALS: Record<string, number> = {
 };
 
 function extractPassengers(text: string): number | undefined {
+  const labeled = text.match(/人数\s*[:：]\s*(\d{1,2})/);
+  if (labeled) {
+    const n = Number(labeled[1]);
+    if (n >= 1 && n <= 10) return n;
+  }
   const digit = text.match(/(\d+)\s*(?:人|位|张|名)(?:票)?/) || text.match(/^(\d+)$/);
   if (digit) {
     const n = Number(digit[1]);
@@ -614,19 +619,190 @@ function extractTimeWindow(text: string): string | undefined {
   return undefined;
 }
 
-function extractEvent(text: string): { eventName?: string; venue?: string; city?: string } {
-  const venue = text.match(/(?:在|于)\s*([^\s,，。]{2,30}(?:体育场|体育馆|中心|大剧院|剧场|场馆|Arena|arena))/);
-  const city = text.match(/(北京|上海|广州|深圳|杭州|成都|重庆|武汉|西安|南京|苏州|天津|长沙|郑州|青岛|厦门|福州)/);
-  let eventName = text
-    .replace(/我想|我要|帮我|盯票|抢票|买票|看|听/g, "")
-    .replace(/演出|演唱会|音乐会/g, "")
+/** Labels that bound show field values (stop eventName/tier/venue at these). */
+const SHOW_BOUND_LABELS =
+  String.raw`(?:演出名|演唱会名|活动名|演出|活动|场馆|地点|日期|票档|票价档|人数|盯票开始|盯票|开抢|开售|时间)`;
+
+/** True when a show field value still contains another field's label / delimiter blob. */
+export function isPollutedShowValue(value: string | undefined, kind: "eventName" | "venue" | "tier"): boolean {
+  if (!value) return false;
+  const v = value.trim();
+  if (!v) return true;
+  if (/[;；]/.test(v)) return true;
+  if (kind === "eventName") {
+    if (/(?:场馆|地点|日期|票档|票价档|人数|盯票|开抢|开售)\s*[:：]?/.test(v)) return true;
+    if (/\d{4}[./-]\d{1,2}/.test(v)) return true;
+    if (/我要|帮我|盯票|抢票|买票/.test(v)) return true;
+    if (v.length > 40) return true;
+  }
+  if (kind === "tier") {
+    if (/(?:场馆|地点|日期|人数|盯票|开抢|开售|演出|活动)\s*[:：]?/.test(v)) return true;
+    if (v.length > 24) return true;
+  }
+  if (kind === "venue") {
+    if (/(?:日期|票档|票价档|人数|盯票|开抢|开售|演出)\s*[:：]?/.test(v)) return true;
+    if (v.length > 40) return true;
+  }
+  return false;
+}
+
+function cleanShowValue(raw: string): string {
+  return raw
+    .replace(/^[\s:：,，;；]+/, "")
+    .replace(/[\s,，;；]+$/, "")
     .trim();
-  if (eventName.length < 2) eventName = undefined as unknown as string;
+}
+
+/**
+ * Explicit labeled show parse: 演出/场馆/日期/票档/人数/盯票开始 with ：/: and
+ * ；/;/,/， delimiters. Values stop at the next label or delimiter.
+ */
+function parseLabeledShowFields(text: string, now = new Date()): Partial<IntakeFields> {
+  const patch: Partial<IntakeFields> = {};
+  const take = (labels: string): string | undefined => {
+    const re = new RegExp(
+      `(?:^|[;；,，\\s])(?:${labels})\\s*[:：]\\s*([^;；]*?)(?=\\s*[;；]|\\s*(?:${SHOW_BOUND_LABELS})\\s*[:：]|$)`,
+      "i"
+    );
+    // Also allow ASCII/fullwidth comma as field separator (value must not contain comma)
+    const reComma = new RegExp(
+      `(?:^|[;；,，\\s])(?:${labels})\\s*[:：]\\s*([^;；,，]*?)(?=\\s*[;；,，]|\\s*(?:${SHOW_BOUND_LABELS})\\s*[:：]|$)`,
+      "i"
+    );
+    const m = text.match(reComma) || text.match(re);
+    if (!m?.[1]) return undefined;
+    const v = cleanShowValue(m[1]);
+    return v.length >= 1 ? v : undefined;
+  };
+
+  const eventName = take("演出名|演唱会名|活动名|演出|活动");
+  if (
+    eventName &&
+    !/^(演出|演唱会|音乐会|话剧|门票|活动)$/.test(eventName) &&
+    !isPollutedShowValue(eventName, "eventName")
+  ) {
+    patch.eventName = eventName.slice(0, 80);
+  }
+
+  const venue = take("场馆|地点");
+  if (venue && !isPollutedShowValue(venue, "venue")) patch.venue = venue.slice(0, 80);
+
+  const dateRaw = take("日期|观演日期|演出日期");
+  if (dateRaw) {
+    const d = normalizeDateToken(dateRaw);
+    if (d) patch.date = d;
+  }
+
+  const tier = take("票档|票价档");
+  if (tier && !isPollutedShowValue(tier, "tier")) patch.tier = tier.replace(/\s+/g, "").slice(0, 24);
+
+  const paxRaw = take("人数|观演人数");
+  if (paxRaw) {
+    const n = Number(paxRaw.match(/\d+/)?.[0]);
+    if (n >= 1 && n <= 10) patch.passengers = n;
+  }
+
+  const grabRaw = take("盯票开始|开售时间|开抢时间|开售|开抢|盯票");
+  if (grabRaw) {
+    // Re-parse with intent so calendar datetime binds; prefix keyword for parseGrabStart.
+    const g =
+      parseGrabStart(`盯票开始 ${grabRaw}`, now, true) ||
+      parseGrabStart(`盯票开始：${grabRaw}`, now, false);
+    if (g) patch.grabStartAt = g;
+  }
+
+  return patch;
+}
+
+function extractEvent(text: string): { eventName?: string; venue?: string; city?: string } {
+  const city = text.match(/(北京|上海|广州|深圳|杭州|成都|重庆|武汉|西安|南京|苏州|天津|长沙|郑州|青岛|厦门|福州)/);
+
+  // Venue: 「场馆XXX」 / 「场馆：XXX」 or 「在/于 …中心|体育场…」
+  let venue: string | undefined;
+  const venueField = text.match(
+    new RegExp(
+      String.raw`场馆\s*[:：]?\s*([^\s,，。；;]{2,40}?)(?=\s*[;；,，]|` +
+        SHOW_BOUND_LABELS +
+        String.raw`\s*[:：]|$)`
+    )
+  );
+  if (venueField?.[1]) {
+    venue = cleanShowValue(venueField[1]);
+  } else {
+    const venueSuffix = text.match(
+      /(?:在|于)\s*([^\s,，。；;]{2,30}(?:体育场|体育馆|中心|大剧院|剧场|场馆|Arena|arena))/
+    );
+    if (venueSuffix?.[1]) venue = cleanShowValue(venueSuffix[1]);
+  }
+  if (venue && isPollutedShowValue(venue, "venue")) venue = undefined;
+
+  // EventName: labeled first, else「…演唱会/音乐会/…」bounded (date may glue before name)
+  let eventName: string | undefined;
+  const labeledEvent = text.match(
+    new RegExp(
+      String.raw`(?:演出名|演唱会名|活动名|演出|活动)\s*[:：]\s*([^;；,，]*?)(?=\s*[;；,，]|` +
+        SHOW_BOUND_LABELS +
+        String.raw`\s*[:：]|$)`
+    )
+  );
+  if (labeledEvent?.[1]) {
+    eventName = cleanShowValue(labeledEvent[1]);
+  } else {
+    // Digits/hyphens excluded so「我要看2026-12-31周杰伦演唱会」does not swallow date into the name.
+    const named = text.match(
+      /(?:\d{4}[./-]\d{1,2}[./-]\d{1,2})?\s*([\u4e00-\u9fffA-Za-z·]{2,30}(?:演唱会|音乐会|话剧|巡演))/
+    );
+    if (named?.[1]) {
+      eventName = cleanShowValue(named[1]);
+    } else {
+      // Short free-form / multi-turn answer: strip filler, stop at bound labels
+      let stripped = text
+        .replace(/我想|我要|帮我|盯票|抢票|买票|看|听/g, " ")
+        .replace(/\d{4}[./-]\d{1,2}[./-]\d{1,2}/g, " ")
+        .replace(
+          new RegExp(
+            String.raw`(?:场馆|地点|日期|票档|票价档|人数|盯票开始|开抢|开售|时间)\s*[:：]?[^;；,，]*`,
+            "g"
+          ),
+          " "
+        )
+        .replace(/内场\s*\d{0,5}|看台\s*\d{0,5}|\d+\s*张|\d+\s*人/g, " ")
+        .replace(/[;；,，]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (stripped.length >= 2 && stripped.length <= 40) eventName = stripped;
+    }
+  }
+  if (eventName && /^(演出|演唱会|音乐会|话剧|门票|活动)$/.test(eventName)) eventName = undefined;
+  if (eventName && isPollutedShowValue(eventName, "eventName")) eventName = undefined;
+  if (eventName && eventName.length < 2) eventName = undefined;
+
   return {
-    eventName: eventName && eventName.length >= 2 ? eventName.slice(0, 80) : undefined,
-    venue: venue?.[1],
+    eventName: eventName ? eventName.slice(0, 80) : undefined,
+    venue: venue ? venue.slice(0, 80) : undefined,
     city: city?.[1],
   };
+}
+
+
+/** Drop polluted show fields so missing/confirm cannot proceed on swallowed blobs. */
+function sanitizeShowFields(fields: IntakeFields): void {
+  if (fields.channel !== "show") return;
+  if (
+    fields.eventName &&
+    (isPollutedShowValue(fields.eventName, "eventName") ||
+      /^(演出|演唱会|音乐会|话剧|门票|活动)$/.test(fields.eventName.trim()))
+  ) {
+    delete fields.eventName;
+  }
+  if (fields.venue && isPollutedShowValue(fields.venue, "venue")) {
+    delete fields.venue;
+  }
+  if (fields.tier && isPollutedShowValue(fields.tier, "tier")) {
+    delete fields.tier;
+  }
+  // Venue must be present for confirm (「未知」 counts as answered)
+  // eventName must not contain other labels — already cleared above
 }
 
 /** Merge extractions from a user utterance into session fields. */
@@ -637,11 +813,17 @@ export function extractIntakePatch(text: string, current: IntakeFields, now = ne
   const ch = patch.channel ?? current.channel;
 
   if (ch === "show") {
+    const labeled = parseLabeledShowFields(text, now);
+    for (const [k, v] of Object.entries(labeled)) {
+      if (v !== undefined && (current as Record<string, unknown>)[k] == null) {
+        (patch as Record<string, unknown>)[k] = v;
+      }
+    }
     const ev = extractEvent(text);
-    if (ev.eventName && !current.eventName) patch.eventName = ev.eventName;
-    if (ev.venue && !current.venue) patch.venue = ev.venue;
+    if (ev.eventName && !current.eventName && !patch.eventName) patch.eventName = ev.eventName;
+    if (ev.venue && !current.venue && !patch.venue) patch.venue = ev.venue;
     if (ev.city && !current.fromCity) patch.fromCity = ev.city;
-    if (/未知|没有|无|不详|skip/i.test(text.trim()) && !current.venue) patch.venue = "未知";
+    if (/未知|没有|无|不详|skip/i.test(text.trim()) && !current.venue && !patch.venue) patch.venue = "未知";
   } else {
     const ft = extractFromTo(text, ch);
     if (ft.from && !current.from) patch.from = ft.from;
@@ -735,14 +917,23 @@ export function extractIntakePatch(text: string, current: IntakeFields, now = ne
   if (ch === "show") {
     // Do not treat a *whole-answer* YYYY-MM-DD (or bare year) as tier.
     // Free-form with both date and 内场680 must still extract tier.
+    // Never use 票档\S+ — that swallows 人数/盯票开始 after fullwidth colon.
     const wholeIsDate =
       /^\d{4}[-/.年]\d{1,2}([-/.月]\d{1,2})?日?$/.test(text.trim()) || /^20\d{2}$/.test(text.trim());
-    if (!wholeIsDate) {
-      const tierM = text.match(/(?:票档\s*)?(内场\s*\d{0,5}|看台\s*\d{0,5}|\d{2,5}\s*元|[A-Z]区|VIP|内场|看台)|票档\s*(\S+)/i);
-      if (tierM && !current.tier) {
-        const cand = (tierM[1] || tierM[2])!.trim();
-        // reject pure year / date-looking tier tokens
-        if (cand && !/^\d{4}([-/.年]\d{1,2})?$/.test(cand)) patch.tier = cand.replace(/\s+/g, "");
+    if (!wholeIsDate && !current.tier && !patch.tier) {
+      const tierLabeled = text.match(/票(?:档|价档)\s*[:：]\s*([^\s;；,，]{1,20})/);
+      const tierM =
+        tierLabeled ||
+        text.match(/(内场\s*\d{2,5}|看台\s*\d{2,5}|\d{2,5}\s*元|[A-Z]区|VIP|内场|看台)/i);
+      if (tierM) {
+        const cand = (tierM[1] || "").trim();
+        if (
+          cand &&
+          !/^\d{4}([-/.年]\d{1,2})?$/.test(cand) &&
+          !isPollutedShowValue(cand, "tier")
+        ) {
+          patch.tier = cand.replace(/\s+/g, "");
+        }
       }
     }
     if (
@@ -871,6 +1062,16 @@ export type ConfirmationCard = {
 
 export function buildConfirmationCard(fields: IntakeFields): ConfirmationCard | null {
   if (!fields.channel) return null;
+  if (fields.channel === "show") {
+    if (
+      isPollutedShowValue(fields.eventName, "eventName") ||
+      isPollutedShowValue(fields.venue, "venue") ||
+      isPollutedShowValue(fields.tier, "tier") ||
+      !fields.venue
+    ) {
+      return null;
+    }
+  }
   const missing = nextMissingField(fields);
   if (missing) return null;
 
@@ -1007,6 +1208,7 @@ export function processTurn(
       delete fields.grabStartAt;
     }
   }
+  sanitizeShowFields(fields);
   // Defaults after channel known
   if (fields.channel && fields.passengers == null && patch.passengers == null) {
     /* still ask */

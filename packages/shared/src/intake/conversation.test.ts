@@ -527,3 +527,119 @@ describe("P1c dual-date grabStartAt + 时间不限 seat + Shanghai display", () 
     assert.equal(r.missing, "grabStartAt");
   });
 });
+
+describe("P1d show labeled/natural field boundaries (no swallow)", () => {
+  const fixedNow = new Date("2026-09-22T04:00:00.000Z");
+
+  const expectCleanShow = (r: ReturnType<typeof processTurn>) => {
+    assert.equal(r.session.fields.channel, "show");
+    assert.equal(r.session.fields.eventName, "周杰伦演唱会");
+    assert.equal(r.session.fields.venue, "梅赛德斯-奔驰文化中心");
+    assert.equal(r.session.fields.date, "2026-12-31");
+    assert.equal(r.session.fields.tier, "内场680");
+    assert.equal(r.session.fields.passengers, 2);
+    assert.equal(r.session.fields.grabStartAt, "2026-11-20T01:00:00.000Z");
+    assert.equal(r.readyForConfirm, true);
+    assert.ok(r.confirmation);
+    assert.equal(r.missing, null);
+    const byLabel = Object.fromEntries(r.confirmation!.lines.map((l) => [l.label, l.value]));
+    assert.equal(byLabel["演出"], "周杰伦演唱会");
+    assert.equal(byLabel["场馆"], "梅赛德斯-奔驰文化中心");
+    assert.equal(byLabel["日期"], "2026-12-31");
+    assert.equal(byLabel["票档"], "内场680");
+    assert.equal(byLabel["人数"], "2");
+    assert.match(byLabel["盯票开始"]!, /2026-11-20 09:00/);
+    assert.doesNotMatch(byLabel["演出"]!, /场馆|日期|票档|人数|盯票/);
+    assert.doesNotMatch(byLabel["票档"]!, /人数|盯票|场馆/);
+  };
+
+  it("labeled fullwidth semicolon single-shot", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "演出：周杰伦演唱会；场馆：梅赛德斯-奔驰文化中心；日期：2026-12-31；票档：内场680；人数：2；盯票开始：2026-11-20 09:00",
+      fixedNow
+    );
+    expectCleanShow(r);
+  });
+
+  it("natural single-shot with 场馆/内场680/2张/grab clause", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "我要看2026-12-31周杰伦演唱会，场馆梅赛德斯-奔驰文化中心，内场680，2张，2026-11-20 09:00开始盯票",
+      fixedNow
+    );
+    expectCleanShow(r);
+  });
+
+  it("labeled ASCII colon + comma separators", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "演出:周杰伦演唱会,场馆:梅赛德斯-奔驰文化中心,日期:2026-12-31,票档:内场680,人数:2,盯票开始:2026-11-20 09:00",
+      fixedNow
+    );
+    expectCleanShow(r);
+  });
+
+  it("labeled fullwidth comma variant", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "演出：周杰伦演唱会，场馆：梅赛德斯-奔驰文化中心，日期：2026-12-31，票档：内场680，人数：2，盯票开始：2026-11-20 09:00",
+      fixedNow
+    );
+    expectCleanShow(r);
+  });
+
+  it("missing venue → ask venue, no confirm", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "演出：周杰伦演唱会；日期：2026-12-31；票档：内场680；人数：2；盯票开始：2026-11-20 09:00",
+      fixedNow
+    );
+    assert.equal(r.session.fields.eventName, "周杰伦演唱会");
+    assert.equal(r.session.fields.venue, undefined);
+    assert.equal(r.missing, "venue");
+    assert.equal(r.readyForConfirm, false);
+    assert.equal(r.confirmation, undefined);
+    assert.ok(/场馆/.test(r.reply));
+  });
+
+  it("polluted eventName must not confirm", () => {
+    // Force a session that somehow has a swallowed blob — sanitize must block confirm
+    let r = processTurn(createEmptySession(), "演出", fixedNow);
+    r = processTurn(
+      {
+        ...r.session,
+        fields: {
+          channel: "show",
+          eventName: "周杰伦；场馆：梅赛德斯；日期：2026-12-31",
+          venue: "梅赛德斯-奔驰文化中心",
+          date: "2026-12-31",
+          tier: "内场680",
+          passengers: 2,
+          grabStartAt: "2026-11-20T01:00:00.000Z",
+        },
+      },
+      "确认一下",
+      fixedNow
+    );
+    // sanitize clears polluted eventName → missing eventName, no confirm
+    assert.equal(r.readyForConfirm, false);
+    assert.equal(r.confirmation, undefined);
+    assert.ok(r.missing === "eventName" || !r.session.fields.eventName);
+  });
+
+  it("multi-turn show path still works", () => {
+    let r = processTurn(createEmptySession(), "演出", fixedNow);
+    r = processTurn(r.session, "周杰伦嘉年华演唱会", fixedNow);
+    assert.equal(r.session.fields.eventName, "周杰伦嘉年华演唱会");
+    r = processTurn(r.session, "梅赛德斯-奔驰文化中心", fixedNow);
+    assert.equal(r.session.fields.venue, "梅赛德斯-奔驰文化中心");
+    r = processTurn(r.session, "2026-12-31", fixedNow);
+    r = processTurn(r.session, "内场680", fixedNow);
+    r = processTurn(r.session, "2人", fixedNow);
+    r = processTurn(r.session, "2026-11-20 09:00", fixedNow);
+    assert.equal(r.readyForConfirm, true);
+    assert.equal(r.session.fields.grabStartAt, "2026-11-20T01:00:00.000Z");
+    assert.equal(r.confirmation!.lines.find((l) => l.label === "演出")?.value, "周杰伦嘉年华演唱会");
+  });
+});
