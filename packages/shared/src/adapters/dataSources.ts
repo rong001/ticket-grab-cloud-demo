@@ -7,10 +7,16 @@ export type ChannelDataStatus = {
   /** Whether a live provider path is configured / reachable in principle */
   liveConfigured: boolean;
   /**
-   * True only when an authorized inventory/fare source is configured
-   * (Amadeus / Aviationstack / FLIGHT_PUBLIC_API_URL). OpenSky ADS-B alone is NOT inventory.
+   * True ONLY when a sellable inventory/fare API is configured
+   * (Amadeus Flight Offers / FLIGHT_PUBLIC_API_URL with bookable offers).
+   * Aviationstack timetable, OpenSky ADS-B, and fixtures are NOT inventory.
    */
   inventoryLive: boolean;
+  /**
+   * True when a schedule/status/ADS-B/timetable source is configured
+   * (Aviationstack, OpenSky, or inventory sources that also expose schedules).
+   */
+  scheduleLive: boolean;
   /** True when a fare/price monitor source is configured (Amadeus shopping, etc.). */
   fareMonitor: boolean;
   /** Short label for UI: 实时 / 演示 / 需配置 / 不可用 */
@@ -20,11 +26,19 @@ export type ChannelDataStatus = {
   notes: string;
 };
 
-/** Inventory/fare capable keys only — OpenSky ADS-B does not count. */
+/** Sellable inventory/fare keys only — Aviationstack + OpenSky do NOT count. */
 export function flightInventoryKeysConfigured(): boolean {
+  if (process.env.AMADEUS_CLIENT_ID && process.env.AMADEUS_CLIENT_SECRET) return true;
+  if (process.env.FLIGHT_PUBLIC_API_URL) return true;
+  return false;
+}
+
+/** Schedule/status/ADS-B/timetable sources (not proof of sellable seats/fares). */
+export function flightScheduleKeysConfigured(): boolean {
   if (process.env.AMADEUS_CLIENT_ID && process.env.AMADEUS_CLIENT_SECRET) return true;
   if (process.env.FLIGHT_API_KEY) return true;
   if (process.env.FLIGHT_PUBLIC_API_URL) return true;
+  if (process.env.FLIGHT_OPENSKY !== "0") return true;
   return false;
 }
 
@@ -39,22 +53,33 @@ export function flightFareMonitorConfigured(): boolean {
 function flightLiveConfigured(): {
   configured: boolean;
   inventoryLive: boolean;
+  scheduleLive: boolean;
   fareMonitor: boolean;
   provider: string;
   notes: string;
   badge: ChannelDataStatus["badge"];
   labelZh: string;
 } {
-  const inventoryLive = flightInventoryKeysConfigured();
-  const fareMonitor = flightFareMonitorConfigured();
-
   if (process.env.AMADEUS_CLIENT_ID && process.env.AMADEUS_CLIENT_SECRET) {
     return {
       configured: true,
       inventoryLive: true,
+      scheduleLive: true,
       fareMonitor: true,
       provider: "amadeus",
-      notes: "Amadeus self-service shopping (AMADEUS_CLIENT_ID + AMADEUS_CLIENT_SECRET)",
+      notes: "Amadeus Self-Service Flight Offers (AMADEUS_CLIENT_ID + AMADEUS_CLIENT_SECRET) — bookable offers + fares.",
+      badge: "live",
+      labelZh: "实时",
+    };
+  }
+  if (process.env.FLIGHT_PUBLIC_API_URL) {
+    return {
+      configured: true,
+      inventoryLive: true,
+      scheduleLive: true,
+      fareMonitor: true,
+      provider: "flight_public",
+      notes: `Custom FLIGHT_PUBLIC_API_URL=${process.env.FLIGHT_PUBLIC_API_URL} (treated as inventory/fare when it returns bookable offers).`,
       badge: "live",
       labelZh: "实时",
     };
@@ -62,34 +87,25 @@ function flightLiveConfigured(): {
   if (process.env.FLIGHT_API_KEY) {
     return {
       configured: true,
-      inventoryLive: true,
+      inventoryLive: false,
+      scheduleLive: true,
       fareMonitor: false,
       provider: "aviationstack",
       notes:
-        "Aviationstack (FLIGHT_API_KEY) — schedule/status; fare monitor limited. Prefer Amadeus for bookable offers.",
-      badge: "live",
-      labelZh: "实时(时刻)",
-    };
-  }
-  if (process.env.FLIGHT_PUBLIC_API_URL) {
-    return {
-      configured: true,
-      inventoryLive: true,
-      fareMonitor: true,
-      provider: "flight_public",
-      notes: `Custom FLIGHT_PUBLIC_API_URL=${process.env.FLIGHT_PUBLIC_API_URL}`,
-      badge: "live",
-      labelZh: "实时",
+        "Aviationstack (FLIGHT_API_KEY) — schedule/status ONLY. No reliable fares or sellable inventory. flightInventoryLive stays false; prefer Amadeus Flight Offers for inventoryLive.",
+      badge: "unavailable",
+      labelZh: "实时可售票/票价监控不可用",
     };
   }
   if (process.env.FLIGHT_OPENSKY !== "0") {
     return {
       configured: true,
       inventoryLive: false,
+      scheduleLive: true,
       fareMonitor: false,
       provider: "opensky",
       notes:
-        "OpenSky Network ADS-B only (no fares, no bookable inventory). 「实时可售票/票价监控不可用」. Set Amadeus/Aviationstack keys for inventory; FLIGHT_OPENSKY=0 to disable ADS-B fallback.",
+        "OpenSky Network ADS-B only (no fares, no bookable inventory). 「实时可售票/票价监控不可用」. Set AMADEUS_CLIENT_ID+SECRET for inventory; FLIGHT_OPENSKY=0 to disable ADS-B fallback.",
       badge: "unavailable",
       labelZh: "实时可售票/票价监控不可用",
     };
@@ -97,10 +113,11 @@ function flightLiveConfigured(): {
   return {
     configured: false,
     inventoryLive: false,
+    scheduleLive: false,
     fareMonitor: false,
     provider: "flight",
     notes:
-      "No flight inventory API keys. 「实时可售票/票价监控不可用」. Set AMADEUS_CLIENT_ID+SECRET or FLIGHT_API_KEY, or FLIGHT_PUBLIC_API_URL. Query/official-redirect demo only.",
+      "No flight inventory or schedule API keys. 「实时可售票/票价监控不可用」. Set AMADEUS_CLIENT_ID+SECRET (inventory) or FLIGHT_API_KEY (schedule only).",
     badge: "needs_keys",
     labelZh: "实时可售票/票价监控不可用",
   };
@@ -122,6 +139,7 @@ export function describeDataSources(opts?: {
       mode: trainLive ? "live" : "fixture",
       liveConfigured: true,
       inventoryLive: trainLive,
+      scheduleLive: trainLive,
       fareMonitor: false,
       badge: trainLive ? "live" : "fixture",
       labelZh: trainLive ? "实时" : "演示",
@@ -135,6 +153,7 @@ export function describeDataSources(opts?: {
       mode: showLive ? "live" : "fixture",
       liveConfigured: true,
       inventoryLive: showLive,
+      scheduleLive: showLive,
       fareMonitor: false,
       badge: showLive ? "live" : "fixture",
       labelZh: showLive ? "实时" : "演示",
@@ -145,10 +164,11 @@ export function describeDataSources(opts?: {
     },
     {
       channel: "flight",
-      // OpenSky alone must not present as live inventory mode
-      mode: mode === "live" && flight.inventoryLive ? "live" : mode === "live" ? "fixture" : "fixture",
+      // Only inventory-capable sources present as live inventory mode
+      mode: mode === "live" && flight.inventoryLive ? "live" : "fixture",
       liveConfigured: flight.configured,
       inventoryLive: mode === "live" && flight.inventoryLive,
+      scheduleLive: mode === "live" && flight.scheduleLive,
       fareMonitor: mode === "live" && flight.fareMonitor,
       badge:
         mode !== "live"
@@ -173,6 +193,7 @@ export function describeDataSources(opts?: {
 /** Aggregate honesty flags for /health and UI banners. */
 export function describeFlightHonesty(opts?: { providerMode?: ProviderMode }): {
   flightInventoryLive: boolean;
+  flightScheduleLive: boolean;
   flightFareMonitor: boolean;
   flightProvider: string;
   flightLabelZh: string;
@@ -182,9 +203,16 @@ export function describeFlightHonesty(opts?: { providerMode?: ProviderMode }): {
   const flight = channels.find((c) => c.channel === "flight")!;
   return {
     flightInventoryLive: flight.inventoryLive,
+    flightScheduleLive: flight.scheduleLive,
     flightFareMonitor: flight.fareMonitor,
     flightProvider: flight.provider,
     flightLabelZh: flight.labelZh,
     flightNotes: flight.notes,
   };
+}
+
+/** Providers that may emit tickets_found / 可售 for flight watches. */
+export function isFlightInventoryProvider(provider: string | undefined | null): boolean {
+  const p = String(provider ?? "").toLowerCase();
+  return p === "amadeus" || p === "flight_public";
 }

@@ -8,7 +8,7 @@ import {
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../lib/auth.js";
 import { logActivity } from "../lib/activity.js";
-import { getWatchQueue, removeWatchRepeatable, type WatchJobPayload } from "../lib/queue.js";
+import { getWatchQueue, removeWatchRepeatable, hasWatchRepeatable, type WatchJobPayload } from "../lib/queue.js";
 import { env } from "../env.js";
 
 export async function requestRoutes(app: FastifyInstance) {
@@ -97,25 +97,39 @@ export async function requestRoutes(app: FastifyInstance) {
     });
     // Explicit field projection so list/detail consumers always see lifecycle metadata
     // (Prisma already returns scalars; map keeps contract stable if select is tightened later).
+    const items = await Promise.all(
+      jobs.map(async (j) => {
+        let repeatableArmed = false;
+        try {
+          // Always probe — cancelled jobs must show false to prove removeRepeatable worked.
+          repeatableArmed = await hasWatchRepeatable(j.id);
+        } catch {
+          repeatableArmed = false;
+        }
+        return {
+          id: j.id,
+          requestId: j.requestId,
+          status: j.status,
+          statusReason: j.statusReason ?? null,
+          statusChangedAt: j.statusChangedAt ?? null,
+          intervalMinutes: j.intervalMinutes,
+          startsAt: j.startsAt ?? null,
+          endsAt: j.endsAt ?? null,
+          autoOrder: j.autoOrder,
+          preferences: j.preferences ?? null,
+          lastRunAt: j.lastRunAt ?? null,
+          nextRunAt: j.nextRunAt ?? null,
+          bullJobId: j.bullJobId ?? null,
+          /** True when a BullMQ repeatable still exists for this job (no Redis secrets). */
+          repeatableArmed,
+          createdAt: j.createdAt,
+          updatedAt: j.updatedAt,
+          request: j.request,
+        };
+      })
+    );
     return {
-      items: jobs.map((j) => ({
-        id: j.id,
-        requestId: j.requestId,
-        status: j.status,
-        statusReason: j.statusReason ?? null,
-        statusChangedAt: j.statusChangedAt ?? null,
-        intervalMinutes: j.intervalMinutes,
-        startsAt: j.startsAt ?? null,
-        endsAt: j.endsAt ?? null,
-        autoOrder: j.autoOrder,
-        preferences: j.preferences ?? null,
-        lastRunAt: j.lastRunAt ?? null,
-        nextRunAt: j.nextRunAt ?? null,
-        bullJobId: j.bullJobId ?? null,
-        createdAt: j.createdAt,
-        updatedAt: j.updatedAt,
-        request: j.request,
-      })),
+      items,
       labelZh: "我的定时盯票",
       limits:
         "Watch + notify + optional assistive auto-create awaiting_login order. No captcha/SMS/face/queue/payment bypass.",
@@ -136,7 +150,19 @@ export async function requestRoutes(app: FastifyInstance) {
       },
     });
     if (!row) return reply.code(404).send({ error: "Not found" });
-    return row;
+    const watchJobs = await Promise.all(
+      (row.watchJobs ?? []).map(async (j) => {
+        let repeatableArmed = false;
+        try {
+          // Always probe — cancelled jobs must show false to prove removeRepeatable worked.
+          repeatableArmed = await hasWatchRepeatable(j.id);
+        } catch {
+          repeatableArmed = false;
+        }
+        return { ...j, repeatableArmed };
+      })
+    );
+    return { ...row, watchJobs };
   });
 
   app.post("/requests/:id/search", {
@@ -347,7 +373,19 @@ export async function requestRoutes(app: FastifyInstance) {
       requestId: id,
       watchJobId: job.id,
     });
-    return updated;
+
+    let repeatableArmed = false;
+    try {
+      repeatableArmed = await hasWatchRepeatable(job.id);
+    } catch {
+      repeatableArmed = false;
+    }
+    return {
+      ...updated,
+      repeatableArmed,
+      proofHint:
+        "Poll GET /api/grabs (or GET /api/requests/:id) for ≥5m: status=cancelled, lastRunAt unchanged, repeatableArmed=false. Optional operator redis dump is not required.",
+    };
   });
 
   app.get("/requests/:id/events", {

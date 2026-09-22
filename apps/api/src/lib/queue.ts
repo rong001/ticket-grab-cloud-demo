@@ -186,3 +186,28 @@ export async function sweepOrphanWatchRepeatables(
   return { scanned: repeatables.length, removed };
 }
 
+
+/**
+ * Read-only: does a BullMQ repeatable still exist for this watchJobId?
+ * Safe to expose to the owning user (no Redis secrets / raw keys).
+ */
+export async function hasWatchRepeatable(watchJobId: string): Promise<boolean> {
+  const queue = getWatchQueue();
+  const redis = getRedis();
+  const repeatables = await queue.getRepeatableJobs();
+  for (const r of repeatables) {
+    if (r.id === watchJobId) return true;
+    if (r.key?.includes(watchJobId)) return true;
+    if (!r.key) continue;
+    try {
+      const raw = await redis.hget(`bull:${WATCH_QUEUE}:repeat:${r.key}`, "data");
+      if (raw) {
+        const parsed = JSON.parse(raw) as { watchJobId?: string };
+        if (parsed.watchJobId === watchJobId) return true;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return false;
+}

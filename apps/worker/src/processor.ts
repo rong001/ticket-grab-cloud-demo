@@ -265,18 +265,33 @@ export async function processWatchJob(payload: WatchJobPayload): Promise<void> {
     },
   });
 
-  // Honesty: never treat fixture / OpenSky-fail / liveOk=false as bookable inventory success.
+  // Honesty: never treat fixture / schedule-only / liveOk=false as bookable inventory success.
+  // Aviationstack + OpenSky are schedule/ADS-B only — must not emit tickets_found / 「可抢」.
   const provider = String(result.provider ?? "");
+  const scheduleOnlyFlight =
+    request.channel === "flight" &&
+    (provider === "opensky" ||
+      provider === "aviationstack" ||
+      provider === "flight" ||
+      !provider ||
+      result.items.some(
+        (i) =>
+          i.meta?.scheduleOnly === true ||
+          i.meta?.inventoryHonest === false ||
+          i.meta?.noPrice === true
+      ));
   const inventoryUnreliable =
     result.liveOk !== true ||
     result.mode === "fixture" ||
+    scheduleOnlyFlight ||
     (request.channel === "flight" &&
-      (provider === "opensky" || provider === "flight" || !provider));
+      provider !== "amadeus" &&
+      provider !== "flight_public");
 
   if (inventoryUnreliable && request.channel === "flight") {
     const reason =
       result.notes ??
-      "实时可售票/票价监控不可用（OpenSky ADS-B / fixture / liveOk=false）";
+      "实时可售票/票价监控不可用（OpenSky/Aviationstack 时刻或 fixture / liveOk=false）";
     await setWatchStatus(watch.id, "failed", `degraded: ${reason}`, { nextRunAt });
     await prisma.notificationEvent.create({
       data: {
@@ -307,10 +322,18 @@ export async function processWatchJob(payload: WatchJobPayload): Promise<void> {
     previousItems.length === 0;
 
   // Never mark seatsFound when liveOk is false (any channel).
+  // Flight: only Amadeus / flight_public inventory may claim available/limited seats.
   const seatsFound =
     result.liveOk === true &&
+    !(request.channel === "flight" && scheduleOnlyFlight) &&
+    (request.channel !== "flight" ||
+      provider === "amadeus" ||
+      provider === "flight_public") &&
     result.items.some(
-      (i) => i.availability === "available" || i.availability === "limited"
+      (i) =>
+        (i.availability === "available" || i.availability === "limited") &&
+        i.meta?.scheduleOnly !== true &&
+        i.meta?.noPrice !== true
     );
 
   const isShow = request.channel === "show";

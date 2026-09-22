@@ -281,18 +281,19 @@ async function liveAviationstack(fields: FlightFields): Promise<LiveAttempt<Shor
     const rows = res.data?.data ?? [];
     if (!rows.length) return { ok: false, error: "Aviationstack returned 0 flights" };
 
+    // Schedule/status only — never mark available/limited (no fares / sellable seats).
     const items: ShortlistItem[] = rows.map((row, idx) => {
       const flightNo = row.flight?.iata ?? `${row.airline?.iata ?? ""}${row.flight?.number ?? idx}`;
       const dep = row.departure?.scheduled;
       const arr = row.arrival?.scheduled;
       const status = (row.flight_status ?? "").toLowerCase();
       const availability =
-        status === "cancelled" ? "sold_out" : status === "active" || status === "scheduled" ? "available" : "unknown";
+        status === "cancelled" ? "sold_out" : "unknown";
       return {
         id: `avs-${flightNo}-${fields.date}-${idx}`,
         channel: "flight",
         title: `${flightNo} ${origin} → ${dest}`,
-        subtitle: `${fields.date} ${hhmm(dep)}–${hhmm(arr)} · ${row.airline?.name ?? "Airline"}`,
+        subtitle: `${fields.date} ${hhmm(dep)}–${hhmm(arr)} · ${row.airline?.name ?? "Airline"} · 时刻表(无票价)`,
         datetime: dep,
         availability,
         meta: {
@@ -300,6 +301,9 @@ async function liveAviationstack(fields: FlightFields): Promise<LiveAttempt<Shor
           flightNo,
           status: row.flight_status,
           cabin: fields.cabin ?? "economy",
+          scheduleOnly: true,
+          noPrice: true,
+          inventoryHonest: false,
         },
       };
     });
@@ -434,14 +438,14 @@ async function liveSearch(fields: FlightFields): Promise<LiveAttempt<ShortlistIt
     error:
       errors.length > 0
         ? errors.join(" | ")
-        : "No flight provider configured. Set AMADEUS_CLIENT_ID+SECRET or FLIGHT_API_KEY, or see README「5 分钟启用实时机票」.",
+        : "No flight inventory provider configured. Set AMADEUS_CLIENT_ID+SECRET (Flight Offers) for inventoryLive; FLIGHT_API_KEY is schedule-only.",
   };
 }
 
 
-function flightKeysConfigured(): boolean {
+/** Inventory/fare keys only — schedule-only Aviationstack must not unlock fake-price fixtures. */
+function flightInventoryOrPublicConfigured(): boolean {
   if (process.env.AMADEUS_CLIENT_ID && process.env.AMADEUS_CLIENT_SECRET) return true;
-  if (process.env.FLIGHT_API_KEY) return true;
   if (process.env.FLIGHT_PUBLIC_API_URL) return true;
   return false;
 }
@@ -465,22 +469,36 @@ export const flightAdapter: TicketAdapter = {
       provider,
       requestedMode: mode,
       live,
-      fixtureItems: flightKeysConfigured() || mode !== "live"
+      fixtureItems: flightInventoryOrPublicConfigured() || mode !== "live"
         ? fixtureItems(fields)
         : [],
       fixtureNotes:
-        mode === "live" && !flightKeysConfigured()
-          ? "未配置机票 API Key（AMADEUS_CLIENT_ID/SECRET 或 FLIGHT_API_KEY）。不会展示虚假票价。配置后重试，或将 PROVIDER_MODE=fixture 仅作界面演示。"
+        mode === "live" && !flightInventoryOrPublicConfigured()
+          ? "未配置机票可售库存 API（AMADEUS_CLIENT_ID/SECRET 或 FLIGHT_PUBLIC_API_URL）。Aviationstack/OpenSky 仅时刻/ADS-B，不算可售。不会展示虚假票价。"
           : "Fixture mode — sample flight shortlist (演示数据，非实时票价).",
     });
 
-    // OpenSky is ADS-B departures only — never present as bookable sold inventory.
-    if (result.liveOk && provider === "opensky") {
-      result.notes =
-        "OpenSky ADS-B 公开离港（无票价、无余票）。非航司可售库存；配置 Amadeus/Aviationstack 后可获得可订报价。";
+    // Schedule-only / ADS-B providers — never present as bookable inventory or 「可抢」.
+    const scheduleOnly =
+      provider === "opensky" || provider === "aviationstack";
+    if (result.liveOk && scheduleOnly) {
+      if (provider === "opensky") {
+        result.notes =
+          "OpenSky ADS-B 公开离港（无票价、无余票）。非航司可售库存；配置 Amadeus Flight Offers 后可获得可订报价。flightScheduleLive 仅表示时刻/轨迹源，不等于 inventoryLive。";
+      } else {
+        result.notes =
+          "Aviationstack 时刻/状态（无可靠票价、无可售座位证明）。flightScheduleLive 可 true，flightInventoryLive 仍为 false；不会作为「可抢/有票」成功。";
+      }
       for (const item of result.items) {
-        if (item.availability === "available") item.availability = "unknown";
-        item.meta = { ...(item.meta ?? {}), noPrice: true, inventoryHonest: false };
+        if (item.availability === "available" || item.availability === "limited") {
+          item.availability = "unknown";
+        }
+        item.meta = {
+          ...(item.meta ?? {}),
+          scheduleOnly: true,
+          noPrice: true,
+          inventoryHonest: false,
+        };
       }
     }
     if (!result.liveOk && mode === "live") {

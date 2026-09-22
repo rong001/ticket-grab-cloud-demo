@@ -263,3 +263,153 @@ describe("venue curated fallback + station cache status", () => {
     }
   });
 });
+
+describe("flight honesty flags (schedule vs inventory)", () => {
+  const keys = [
+    "AMADEUS_CLIENT_ID",
+    "AMADEUS_CLIENT_SECRET",
+    "FLIGHT_API_KEY",
+    "FLIGHT_PUBLIC_API_URL",
+    "FLIGHT_OPENSKY",
+    "PROVIDER_MODE",
+  ] as const;
+
+  function snapshotEnv() {
+    const prev: Record<string, string | undefined> = {};
+    for (const k of keys) prev[k] = process.env[k];
+    return prev;
+  }
+  function restoreEnv(prev: Record<string, string | undefined>) {
+    for (const k of keys) {
+      if (prev[k] === undefined) delete process.env[k];
+      else process.env[k] = prev[k]!;
+    }
+  }
+
+  it("OpenSky 404 / ADS-B fail → inventoryLive=false, no tickets_found semantics", async () => {
+    const prev = snapshotEnv();
+    process.env.PROVIDER_MODE = "live";
+    delete process.env.AMADEUS_CLIENT_ID;
+    delete process.env.AMADEUS_CLIENT_SECRET;
+    delete process.env.FLIGHT_API_KEY;
+    delete process.env.FLIGHT_PUBLIC_API_URL;
+    process.env.FLIGHT_OPENSKY = "1";
+    try {
+      const { describeFlightHonesty, describeDataSources } = await import("./dataSources.js");
+      const honesty = describeFlightHonesty({ providerMode: "live" });
+      assert.equal(honesty.flightInventoryLive, false);
+      assert.equal(honesty.flightFareMonitor, false);
+      assert.equal(honesty.flightScheduleLive, true); // ADS-B configured
+      assert.match(honesty.flightLabelZh, /不可用/);
+      const flight = describeDataSources({ providerMode: "live" }).find((c) => c.channel === "flight")!;
+      assert.equal(flight.badge, "unavailable");
+      assert.equal(flight.inventoryLive, false);
+
+      // Force OpenSky fail via absurd airport / disabled path in search
+      process.env.FLIGHT_OPENSKY = "0"; // force fail path for search
+      const result = await searchTickets(
+        "flight",
+        { from: "SZX", to: "PVG", date: "2026-09-25" },
+        "live"
+      );
+      assert.equal(result.liveOk, false);
+      assert.equal(result.items.length, 0);
+      assert.ok(!result.items.some((i) => i.availability === "available"));
+    } finally {
+      restoreEnv(prev);
+    }
+  });
+
+  it("schedule-only Aviationstack mock → scheduleLive may be true, inventoryLive=false", async () => {
+    const prev = snapshotEnv();
+    process.env.PROVIDER_MODE = "live";
+    delete process.env.AMADEUS_CLIENT_ID;
+    delete process.env.AMADEUS_CLIENT_SECRET;
+    delete process.env.FLIGHT_PUBLIC_API_URL;
+    process.env.FLIGHT_API_KEY = "test-schedule-only-key";
+    process.env.FLIGHT_OPENSKY = "0";
+    try {
+      const { describeFlightHonesty, isFlightInventoryProvider } = await import("./dataSources.js");
+      const honesty = describeFlightHonesty({ providerMode: "live" });
+      assert.equal(honesty.flightInventoryLive, false);
+      assert.equal(honesty.flightScheduleLive, true);
+      assert.equal(honesty.flightFareMonitor, false);
+      assert.equal(honesty.flightProvider, "aviationstack");
+      assert.match(honesty.flightLabelZh, /不可用/);
+      assert.equal(isFlightInventoryProvider("aviationstack"), false);
+      assert.equal(isFlightInventoryProvider("opensky"), false);
+      assert.equal(isFlightInventoryProvider("amadeus"), true);
+
+      // Mock Aviationstack HTTP with undici-style global fetch override
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("aviationstack.com")) {
+          return new Response(
+            JSON.stringify({
+              data: [
+                {
+                  flight: { iata: "CA1801", number: "1801" },
+                  departure: { scheduled: "2026-09-25T08:00:00+08:00" },
+                  arrival: { scheduled: "2026-09-25T10:30:00+08:00" },
+                  airline: { name: "Air China", iata: "CA" },
+                  flight_status: "scheduled",
+                },
+              ],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        }
+        return new Response("not found", { status: 404 });
+      }) as typeof fetch;
+      try {
+        const result = await searchTickets(
+          "flight",
+          { from: "SZX", to: "PVG", date: "2026-09-25" },
+          "live"
+        );
+        assert.equal(result.provider, "aviationstack");
+        assert.equal(result.liveOk, true);
+        assert.ok(result.items.length >= 1);
+        assert.ok(
+          result.items.every(
+            (i) =>
+              i.availability !== "available" &&
+              i.availability !== "limited" &&
+              i.meta?.scheduleOnly === true
+          ),
+          "schedule-only must not emit available/limited (tickets_found / 可抢)"
+        );
+        assert.ok(result.notes && /时刻|Aviationstack|无可靠票价|schedule/i.test(result.notes));
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    } finally {
+      restoreEnv(prev);
+    }
+  });
+
+  it("formal inventory source missing → inventoryLive=false, clear unavailable label", async () => {
+    const prev = snapshotEnv();
+    process.env.PROVIDER_MODE = "live";
+    delete process.env.AMADEUS_CLIENT_ID;
+    delete process.env.AMADEUS_CLIENT_SECRET;
+    delete process.env.FLIGHT_API_KEY;
+    delete process.env.FLIGHT_PUBLIC_API_URL;
+    process.env.FLIGHT_OPENSKY = "0";
+    try {
+      const { describeFlightHonesty } = await import("./dataSources.js");
+      const honesty = describeFlightHonesty({ providerMode: "live" });
+      assert.equal(honesty.flightInventoryLive, false);
+      assert.equal(honesty.flightScheduleLive, false);
+      assert.equal(honesty.flightFareMonitor, false);
+      assert.match(honesty.flightLabelZh, /不可用/);
+      const flight = (await import("./dataSources.js")).describeDataSources({
+        providerMode: "live",
+      }).find((c) => c.channel === "flight")!;
+      assert.ok(flight.badge === "needs_keys" || flight.badge === "unavailable");
+    } finally {
+      restoreEnv(prev);
+    }
+  });
+});

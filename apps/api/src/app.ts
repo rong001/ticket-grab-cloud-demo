@@ -198,8 +198,9 @@ export async function buildApp() {
       trainRealSubmit: flags.trainRealSubmit,
       // Deprecated: now equals trainRealSubmit&&!bookingStub (was !bookingStub — misleading).
       realTrainSubmit: flags.realTrainSubmit,
-      // Flight honesty: OpenSky ADS-B ≠ bookable inventory / fare monitor.
+      // Flight honesty: Aviationstack/OpenSky = schedule only; inventory needs Amadeus Offers.
       flightInventoryLive: flags.flightInventoryLive,
+      flightScheduleLive: flags.flightScheduleLive,
       flightFareMonitor: flags.flightFareMonitor,
       flightProvider: flags.flightProvider,
       flightLabelZh: flags.flightLabelZh,

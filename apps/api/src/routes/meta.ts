@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import {
   createRequestSchema,
   describeDataSources,
+  describeFlightHonesty,
+  isFlightInventoryProvider,
   listStationsByCity,
   listTrainCities,
   loadStationIndex,
@@ -37,6 +39,7 @@ export async function metaRoutes(app: FastifyInstance) {
       strictLive: process.env.STRICT_LIVE === "1" || process.env.STRICT_LIVE === "true",
       // Top-level honesty aliases for UI / ops (also on each channel row).
       flightInventoryLive: flight?.inventoryLive === true,
+      flightScheduleLive: flight?.scheduleLive === true,
       flightFareMonitor: flight?.fareMonitor === true,
       flightLabelZh: flight?.labelZh ?? "实时可售票/票价监控不可用",
       flightNotes: flight?.notes ?? null,
@@ -277,12 +280,42 @@ export async function metaRoutes(app: FastifyInstance) {
       body.fields as Record<string, unknown>,
       env.providerMode
     );
+    const honesty = describeFlightHonesty({ providerMode: env.providerMode });
+    const scheduleOnlyMeta = result.items.some(
+      (i) =>
+        (i.meta as { scheduleOnly?: boolean } | undefined)?.scheduleOnly === true ||
+        (i.meta as { noPrice?: boolean } | undefined)?.noPrice === true ||
+        (i.meta as { inventoryHonest?: boolean } | undefined)?.inventoryHonest === false
+    );
+    const scheduleProvider =
+      body.channel === "flight" &&
+      !isFlightInventoryProvider(result.provider);
+    // Upstream returned schedule/ADS-B rows (not sellable inventory).
+    const scheduleHit =
+      body.channel === "flight" &&
+      result.liveOk === true &&
+      (scheduleProvider || scheduleOnlyMeta);
+    // Inventory liveOk for UI: schedule-only must not green-badge as 可售.
+    const inventoryLiveOk =
+      body.channel === "flight"
+        ? result.liveOk === true &&
+          honesty.flightInventoryLive &&
+          isFlightInventoryProvider(result.provider) &&
+          !scheduleOnlyMeta
+        : result.liveOk === true;
     return {
       channel: result.channel,
       provider: result.provider,
       mode: result.mode,
       items: result.items,
-      liveOk: result.liveOk === true,
+      liveOk: inventoryLiveOk,
+      /** True only when this response carried schedule/ADS-B data (failed OpenSky → false). */
+      scheduleLive: body.channel === "flight" ? scheduleHit : undefined,
+      inventoryLive: body.channel === "flight" ? inventoryLiveOk : undefined,
+      fareMonitor:
+        body.channel === "flight"
+          ? honesty.flightFareMonitor && inventoryLiveOk
+          : undefined,
       notes: result.notes ?? null,
       queriedAt: result.queriedAt,
       disclaimer:

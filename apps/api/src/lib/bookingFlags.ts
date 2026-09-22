@@ -28,8 +28,10 @@ export type BookingFlags = {
    * Previously meant !bookingStub only — that was misleading for ToC honesty.
    */
   realTrainSubmit: boolean;
-  /** True only with Amadeus/Aviationstack/FLIGHT_PUBLIC_API_URL — not OpenSky ADS-B. */
+  /** True only with Amadeus Flight Offers / FLIGHT_PUBLIC_API_URL — not Aviationstack/OpenSky. */
   flightInventoryLive: boolean;
+  /** True when schedule/status/ADS-B/timetable source is configured. */
+  flightScheduleLive: boolean;
   /** True when a fare/price monitor source is configured. */
   flightFareMonitor: boolean;
   flightProvider: string;
@@ -62,6 +64,7 @@ export function resolveBookingFlags(): BookingFlags {
     trainRealSubmit,
     realTrainSubmit: trainRealSubmit && !bookingStub,
     flightInventoryLive: flight.flightInventoryLive,
+    flightScheduleLive: flight.flightScheduleLive,
     flightFareMonitor: flight.flightFareMonitor,
     flightProvider: flight.flightProvider,
     flightLabelZh: flight.flightLabelZh,
