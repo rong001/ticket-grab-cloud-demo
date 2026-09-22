@@ -60,12 +60,19 @@ curl -sS "$BASE/health" | jq '{trainRealSubmit,bookingStub,providerMode}'
 
 ## Commit SHAs
 
-- Private: _(filled after commit)_
-- Public demo: _(filled after sync)_
+- Private: `6e3365734d97c0e95736075185f9974553e03195`
+- Public demo: `74ef53c7ef3ade39d69f3c056ebdb34789dc791f` — https://github.com/rong001/ticket-grab-cloud-demo/commit/74ef53c7ef3ade39d69f3c056ebdb34789dc791f
 
 ## Live evidence
 
-_(filled after deploy + redacted curl)_
+- `GET /api/health` → `trainRealSubmit=false`, `bookingStub=false`, `providerMode=live`
+- Synthetic register → 2 travelers (hints `****4018` / `****1237`, relationships self/authorized; no full ID)
+- Train request passengers=2 → search → create order with 2 travelerIds → status `awaiting_login`
+- `POST /orders/:id/submit` → **403** `code=TRAIN_REAL_SUBMIT_DISABLED`, `trainRealSubmit=false`, `nextSteps` length 5, status remains `awaiting_login` (not paid)
+- `GET /orders/:id` → gate payload + traveler summaries only
+- UI HTTP 200: `/`, `/accounts`, `/travelers`, `/orders/{id}`
+- Host `.env.production` still `TRAIN_REAL_SUBMIT=0`
+- Commerce :80/:443 untouched
 
 ## Remaining main blocker
 
