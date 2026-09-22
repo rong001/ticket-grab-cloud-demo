@@ -48,12 +48,22 @@ curl -sS "$BASE/health" | jq '{trainRealSubmit,bookingStub,providerMode}'
 
 ## Commit SHAs
 
-- Private: `(pending)`
-- Public demo: `(pending)` — https://github.com/rong001/ticket-grab-cloud-demo/commit/(pending)
+- Private feature:  (+ follow-ups  for shared restore + useParams build fix)
+- Public demo:  — https://github.com/rong001/ticket-grab-cloud-demo/commit/99ec357bfe75cd65ee03e0f619f3b078ad772cdb
+- Public head:  — https://github.com/rong001/ticket-grab-cloud-demo/commit/4ad2d1235e0e249a78fdf21e91973de07b32edb1
 
 ## Live evidence
 
-_(filled after deploy)_
+-  → , , , 
+- Host  still 
+- UI HTTP 200: , 
+- Synthetic register (emailFp only) → 3 watches train+show+flight
+-  → count=3, quota , each row has channel/status/nextRunAt/dataSourceHint/repeatableArmed
+- Pause train →  + ; show remains  + armed
+- Cancel train → cancelled/disarmed; show intact + armed
+- Soft limit covered by local smoke ( 400)
+- Commerce :80/:443 untouched
+-  live → 
 
 ## Remaining main blocker
 
