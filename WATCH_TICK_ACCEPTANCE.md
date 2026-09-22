@@ -4,7 +4,7 @@
 **Live:** https://159.75.71.192:18444  
 **API:** https://159.75.71.192:18444/api  
 **Public repo:** https://github.com/rong001/ticket-grab-cloud-demo  
-**Public SHA:** `02e27eada0a08bb8fbade477c703f084c0fc0726` ([02e27ea](https://github.com/rong001/ticket-grab-cloud-demo/commit/02e27eada0a08bb8fbade477c703f084c0fc0726))  
+**Public SHA:** `1702a1106bdd617390030788bf89d008447fd090` ([1702a11](https://github.com/rong001/ticket-grab-cloud-demo/commit/1702a1106bdd617390030788bf89d008447fd090))  
 
 Synthetic accounts self-registered via `POST /api/auth/register`. Passwords **never** stored or printed. Tokens only fingerprinted.
 
