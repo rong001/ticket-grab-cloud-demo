@@ -1,0 +1,30 @@
+# ticket-grab-cloud (public demo)
+
+Sanitized source for an assistive multi-channel ticket **search / watch / official-redirect** helper (train · show · flight).
+
+## What this is
+
+- Public search (12306 left-ticket style when `PROVIDER_MODE=live`)
+- Chinese conversational intake (`/intake`) → confirmation card → authenticated watch create
+- Persistent watch jobs (Postgres + BullMQ) with lifecycle statuses and restart rehydrate
+- Honest capability copy: **no unauthorized unattended purchase**
+
+## What this is NOT
+
+- Not an authorized 12306 / Damai reseller
+- Not unattended auto seat-hold / payment without platform authorization
+
+## Quick start (local)
+
+```bash
+cp .env.example .env
+# fill JWT_SECRET, ENCRYPTION_KEY, POSTGRES_PASSWORD, CORS_ORIGIN, NEXT_PUBLIC_API_URL
+docker compose -f docker-compose.yml up --build
+```
+
+Production notes: see `DEPLOY.md` / `DEPLOY_HTTPS.md`.  
+Acceptance evidence template: `ACCEPTANCE.md`.
+
+## License
+
+Demo / evaluation source. Do not deploy with placeholder secrets.

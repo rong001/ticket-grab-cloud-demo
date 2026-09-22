@@ -1,0 +1,33 @@
+{
+  "name": "@ticket-grab/api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "prisma generate && tsc -p tsconfig.json",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "test": "PROVIDER_MODE=fixture BOOKING_STUB=1 ALLOW_PUBLIC_REGISTER=1 node --import tsx --test src/intake.test.ts src/orders.smoke.test.ts",
+    "prisma": "prisma"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.1",
+    "@fastify/jwt": "^9.0.1",
+    "@fastify/swagger": "^9.4.0",
+    "@fastify/swagger-ui": "^5.2.0",
+    "@prisma/client": "^5.22.0",
+    "@ticket-grab/shared": "workspace:*",
+    "bcryptjs": "^2.4.3",
+    "bullmq": "^5.25.5",
+    "fastify": "^5.1.0",
+    "ioredis": "^5.4.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.17.0",
+    "prisma": "^5.22.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

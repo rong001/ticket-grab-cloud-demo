@@ -1,0 +1,228 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String               @id @default(cuid())
+  email               String               @unique
+  passwordHash        String
+  name                String?
+  role                String               @default("user") // "admin" | "user"
+  active              Boolean              @default(true)
+  lastLoginAt         DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  requests            TicketRequest[]
+  travelers           Traveler[]
+  platformCredentials PlatformCredential[]
+  orders              Order[]
+  activities          UserActivity[]
+}
+
+model UserActivity {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userEmail String
+  action    String
+  summary   String
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId])
+}
+
+enum Channel {
+  train
+  show
+  flight
+}
+
+enum WatchJobStatus {
+  queued
+  querying
+  has_tickets
+  notified
+  failed
+  cancelled
+  /// legacy aliases kept for existing rows
+  pending
+  active
+  paused
+  completed
+}
+
+enum TravelerType {
+  adult
+  child
+}
+
+enum PlatformKind {
+  train12306 @map("12306")
+  damai
+  maoyan
+  airline
+}
+
+enum SessionStatus {
+  unlinked
+  needs_browser_login
+  linked
+  expired
+}
+
+enum OrderStatus {
+  draft
+  awaiting_login
+  submitting
+  awaiting_payment
+  paid
+  waitlist @map("候补中")
+  failed
+  cancelled
+}
+
+model TicketRequest {
+  id         String              @id @default(cuid())
+  userId     String
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel    Channel
+  fields     Json
+  notifyOnly Boolean             @default(true)
+  notes      String?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  shortlists ShortlistSnapshot[]
+  watchJobs  WatchJob[]
+  events     NotificationEvent[]
+  orders     Order[]
+
+  @@index([userId])
+}
+
+model ShortlistSnapshot {
+  id        String        @id @default(cuid())
+  requestId String
+  request   TicketRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  provider  String
+  mode      String
+  liveOk    Boolean       @default(false)
+  items     Json
+  notes     String?
+  createdAt DateTime      @default(now())
+
+  @@index([requestId])
+}
+
+model WatchJob {
+  id              String         @id @default(cuid())
+  requestId       String
+  request         TicketRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  status          WatchJobStatus @default(queued)
+  intervalMinutes Int            @default(15)
+  startsAt        DateTime?
+  endsAt          DateTime?
+  autoOrder       Boolean        @default(false)
+  /// Channel prefs: preferredTrains/seats (train) or preferredTiers/sessions (show); notify flag
+  preferences     Json?
+  /// Human-readable reason for latest status transition
+  statusReason    String?
+  statusChangedAt DateTime?
+  lastRunAt       DateTime?
+  nextRunAt       DateTime?
+  bullJobId       String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([requestId])
+  @@index([status])
+}
+
+model NotificationEvent {
+  id        String         @id @default(cuid())
+  requestId String?
+  request   TicketRequest? @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  orderId   String?
+  order     Order?         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String?
+  payload   Json?
+  emailed   Boolean        @default(false)
+  createdAt DateTime       @default(now())
+
+  @@index([requestId])
+  @@index([orderId])
+}
+
+/// Passenger / attendee profile for booking (name + ID stored encrypted-at-rest when ENCRYPTION_KEY set).
+model Traveler {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  idType         String       @default("id_card")
+  /// Encrypted blob (AES-256-GCM) or plaintext only in fixture/dev without ENCRYPTION_KEY — see README.
+  idNumberEnc    String
+  /// Last 4 chars for display (never full ID in list APIs).
+  idNumberHint   String?
+  phone          String?
+  type           TravelerType @default(adult)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([userId])
+}
+
+/// Per-user platform session metadata. NEVER store plaintext passwords.
+model PlatformCredential {
+  id               String        @id @default(cuid())
+  userId           String
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform         PlatformKind
+  sessionStatus    SessionStatus @default(unlinked)
+  /// Optional vault reference (e.g. external secret manager key id). Prefer this over cookie blobs.
+  vaultRef         String?
+  /// Encrypted session-cookie / token blob — SENSITIVE. Requires ENCRYPTION_KEY. See README warning.
+  sessionCookieEnc String?
+  lastVerifiedAt   DateTime?
+  displayName      String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@unique([userId, platform])
+  @@index([userId])
+}
+
+model Order {
+  id                    String              @id @default(cuid())
+  userId                String
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestId             String
+  request               TicketRequest       @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  channel               Channel
+  status                OrderStatus         @default(draft)
+  selectedShortlistItemId String
+  travelerIds           String[]
+  amount                Float?
+  currency              String              @default("CNY")
+  externalOrderId       String?
+  /// Channel-specific payload (shortlist item snapshot, nextSteps, confirmation fields).
+  payload               Json?
+  errorMessage          String?
+  paymentUrl            String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  events                NotificationEvent[]
+
+  @@index([userId])
+  @@index([requestId])
+  @@index([status])
+}
+

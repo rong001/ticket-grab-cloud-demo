@@ -1,0 +1,151 @@
+# Production-oriented compose. Mailhog is OPTIONAL (profile: mail).
+# Usage:
+#   cp .env.production.example .env.production
+#   # edit secrets — JWT_SECRET / ENCRYPTION_KEY must NOT be defaults
+#   ./scripts/prod-up.sh
+#
+# Or: docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ticket}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-ticket_grab}
+    volumes:
+      - pgdata_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ticket} -d ${POSTGRES_DB:-ticket_grab}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Do NOT publish 5432 publicly in real prod — reverse-proxy / private network only.
+    expose:
+      - "5432"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata_prod:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    expose:
+      - "6379"
+
+  # Optional local mail catcher — enable with: --profile mail
+  mailhog:
+    profiles: ["mail"]
+    image: mailhog/mailhog:v1.0.1
+    ports:
+      - "8025:8025"
+    expose:
+      - "1025"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ticket}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ticket_grab}?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?Set a strong JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set a strong ENCRYPTION_KEY}
+      ALLOW_PUBLIC_REGISTER: ${ALLOW_PUBLIC_REGISTER:-1}
+      API_HOST: 0.0.0.0
+      API_PORT: 3001
+      CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN to your https web origin}
+      WEB_BASE_URL: ${WEB_BASE_URL:-${CORS_ORIGIN}}
+      PROVIDER_MODE: ${PROVIDER_MODE:-live}
+      BOOKING_STUB: ${BOOKING_STUB:-0}
+      TRAIN_BOOKING_DRY_RUN: ${TRAIN_BOOKING_DRY_RUN:-0}
+      STRICT_LIVE: ${STRICT_LIVE:-0}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_FROM: ${SMTP_FROM:-noreply@example.com}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      AMADEUS_CLIENT_ID: ${AMADEUS_CLIENT_ID:-}
+      AMADEUS_CLIENT_SECRET: ${AMADEUS_CLIENT_SECRET:-}
+      AMADEUS_ENV: ${AMADEUS_ENV:-test}
+      FLIGHT_API_KEY: ${FLIGHT_API_KEY:-}
+      FLIGHT_PUBLIC_API_URL: ${FLIGHT_PUBLIC_API_URL:-}
+      FLIGHT_OPENSKY: ${FLIGHT_OPENSKY:-1}
+      RATE_LIMIT_REDIS: ${RATE_LIMIT_REDIS:-1}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    expose:
+      - "3001"
+    ports:
+      - "${API_HOST_BIND:-127.0.0.1:3001}:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3001/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 40s
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ticket}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ticket_grab}?schema=public
+      REDIS_URL: redis://redis:6379
+      PROVIDER_MODE: ${PROVIDER_MODE:-live}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set a strong ENCRYPTION_KEY}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_FROM: ${SMTP_FROM:-noreply@example.com}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      AMADEUS_CLIENT_ID: ${AMADEUS_CLIENT_ID:-}
+      AMADEUS_CLIENT_SECRET: ${AMADEUS_CLIENT_SECRET:-}
+      AMADEUS_ENV: ${AMADEUS_ENV:-test}
+      FLIGHT_API_KEY: ${FLIGHT_API_KEY:-}
+      FLIGHT_PUBLIC_API_URL: ${FLIGHT_PUBLIC_API_URL:-}
+      FLIGHT_OPENSKY: ${FLIGHT_OPENSKY:-1}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?Set public API URL e.g. https://api.example.com}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    expose:
+      - "3000"
+    ports:
+      - "${WEB_HOST_BIND:-127.0.0.1:3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata_prod:
+  redisdata_prod:

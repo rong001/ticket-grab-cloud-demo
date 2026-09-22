@@ -1,0 +1,13 @@
+# Trusted TLS via Caddy + Let's Encrypt. NEVER self-signed.
+# Free host :80/:443 first — on 159.75.71.192, a-commerce-os-private-demo may hold them.
+# See DEPLOY_HTTPS.md (2026 shorter certs / Certbot renew).
+
+tickets.example.com {
+  encode gzip
+  reverse_proxy 127.0.0.1:3000
+}
+
+api.tickets.example.com {
+  encode gzip
+  reverse_proxy 127.0.0.1:3001
+}

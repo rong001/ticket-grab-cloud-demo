@@ -1,0 +1,20 @@
+{
+  "name": "ticket-grab-cloud",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Multi-tenant legal assistive ticket search/watch service (train / show / flight)",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "dev": "pnpm -r --parallel run dev",
+    "test": "pnpm --filter @ticket-grab/shared test && pnpm --filter @ticket-grab/api test",
+    "lint": "pnpm -r run lint --if-present",
+    "db:generate": "pnpm --filter @ticket-grab/api exec prisma generate",
+    "db:migrate": "pnpm --filter @ticket-grab/api exec prisma migrate deploy",
+    "db:push": "pnpm --filter @ticket-grab/api exec prisma db push",
+    "seed:admin": "node scripts/seed-admin.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.15.9"
+}

@@ -1,0 +1,10 @@
+{
+  "status": true,
+  "httpstatus": 200,
+  "data": {
+    "submitStatus": true,
+    "ifShowPassCode": "N",
+    "canChooseSeats": "Y"
+  },
+  "messages": []
+}

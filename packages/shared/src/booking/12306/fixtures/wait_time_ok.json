@@ -1,0 +1,11 @@
+{
+  "status": true,
+  "httpstatus": 200,
+  "data": {
+    "queryOrderWaitTimeStatus": true,
+    "waitTime": -1,
+    "waitCount": 0,
+    "orderId": "E123456789"
+  },
+  "messages": []
+}

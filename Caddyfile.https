@@ -1,0 +1,13 @@
+{
+  auto_https off
+  default_sni 159.75.71.192
+}
+:18444 {
+  tls /etc/certs/fullchain.pem /etc/certs/privkey.pem
+  handle_path /api/* {
+    reverse_proxy api:3001
+  }
+  handle {
+    reverse_proxy web:3000
+  }
+}

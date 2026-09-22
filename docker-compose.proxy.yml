@@ -1,0 +1,15 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "18090:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /etc/letsencrypt/live/ticket-grab-ip/fullchain.pem:/etc/certs/fullchain.pem:ro
+      - /etc/letsencrypt/live/ticket-grab-ip/privkey.pem:/etc/certs/privkey.pem:ro
+    depends_on:
+      web:
+        condition: service_started
+      api:
+        condition: service_healthy
