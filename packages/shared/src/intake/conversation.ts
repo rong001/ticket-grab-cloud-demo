@@ -4,6 +4,8 @@
  * passenger count, grab-start time — one missing field at a time.
  */
 
+import { isKnownTrainStationName } from "./knownStations.js";
+
 export type IntakeChannel = "train" | "show" | "flight";
 
 export type IntakeFields = {
@@ -81,6 +83,10 @@ function normalizeDateToken(raw: string, now = new Date()): string | undefined {
   const m = s.match(/(\d{4})[./-](\d{1,2})[./-](\d{1,2})/);
   if (m) {
     return `${m[1]}-${m[2]!.padStart(2, "0")}-${m[3]!.padStart(2, "0")}`;
+  }
+  const mYear = s.match(/(\d{4})年(\d{1,2})月(\d{1,2})日?/);
+  if (mYear) {
+    return `${mYear[1]}-${mYear[2]!.padStart(2, "0")}-${mYear[3]!.padStart(2, "0")}`;
   }
   const m2 = s.match(/(\d{1,2})月(\d{1,2})日/);
   if (m2) {
@@ -183,36 +189,103 @@ function cleanPlaceToken(raw: string): string {
     .trim();
 }
 
-function extractFromTo(text: string): { from?: string; to?: string } {
-  // Prefer "从A到B"; avoid swallowing leading date words like 下周/周五
-  const cleaned = text
+/** Strip date / weekday / daypart tokens so they never glue onto station names. */
+function stripTemporalTokens(text: string): string {
+  return text
+    .replace(/\d{4}年\d{1,2}月\d{1,2}日?/g, " ")
+    .replace(/\d{4}[./-]\d{1,2}[./-]\d{1,2}/g, " ")
+    .replace(/\d{1,2}月\d{1,2}日/g, " ")
     .replace(/下?周[日天一二三四五六]?/g, " ")
     .replace(/本周/g, " ")
-    .replace(/今天|明天|后天|今晚|周末/g, " ")
+    .replace(/今天|明天|后天|今晚|周末|今日|明日/g, " ")
     .replace(/早上|早晨|上午|中午|下午|傍晚|晚上|夜间/g, " ");
-  const m =
-    cleaned.match(/从\s*([^\s到去→\-—]{2,20})\s*(?:到|去|至|→|-|—)\s*([^\s,，。的]{2,20})/) ||
-    cleaned.match(/([^\s]{2,12})\s*(?:到|去|至|→|->|-|—)\s*([^\s,，。的]{2,12})/);
-  if (m) {
-    return { from: cleanPlaceToken(m[1]!), to: cleanPlaceToken(m[2]!) };
-  }
-  return {};
 }
 
-function extractPassengers(text: string): number | undefined {
-  const m = text.match(/(\d+)\s*(?:人|位|张|名)/) || text.match(/^(\d+)$/);
-  if (m) {
-    const n = Number(m[1]);
-    if (n >= 1 && n <= 9) return n;
+/**
+ * Reject date fragments, digit-only garbage, route leftovers, etc.
+ * Valid stations must be known allowlist tokens (or city names handled separately).
+ */
+export function isValidStationToken(place?: string): boolean {
+  if (!place) return false;
+  const p = cleanPlaceToken(place);
+  if (p.length < 2 || p.length > 20) return false;
+  // Digits / date-looking / clock tokens never valid
+  if (/\d/.test(p)) return false;
+  if (/[./]/.test(p)) return false;
+  if (/到|去|至|→|->/.test(p)) return false;
+  if (/[:：点]/.test(p)) return false;
+  if (!/^[\u4e00-\u9fffA-Za-z]+$/.test(p)) return false;
+  return isKnownTrainStationName(p);
+}
+
+function acceptPlaceCandidate(raw: string): string | undefined {
+  const place = cleanPlaceToken(raw);
+  if (!place || /\d/.test(place) || /到|去|至|→/.test(place) || /[:：点./]/.test(place)) {
+    return undefined;
   }
-  if (/一人|一位|单人/.test(text)) return 1;
-  if (/两人|两位|双人/.test(text)) return 2;
+  // Only known stations/cities may populate from/to (cities later disambiguated).
+  if (!isKnownTrainStationName(place)) return undefined;
+  return place;
+}
+
+function extractFromTo(text: string): { from?: string; to?: string } {
+  // Prefer "从A到B"; never treat date hyphens as route separators.
+  const cleaned = stripTemporalTokens(text);
+  const m =
+    cleaned.match(/从\s*([^\s到去至→,，。的]{2,20})\s*(?:到|去|至|→|->)\s*([^\s,，。的]{2,20})/) ||
+    cleaned.match(
+      /([\u4e00-\u9fff]{2,12})\s*(?:到|去|至|→|->)\s*([\u4e00-\u9fff]{2,12})/
+    ) ||
+    // Hyphen only when BOTH sides are pure Chinese (北京-上海), never 2026-09
+    cleaned.match(/([\u4e00-\u9fff]{2,12})\s*[-—]\s*([\u4e00-\u9fff]{2,12})/);
+  if (!m) return {};
+  const result: { from?: string; to?: string } = {};
+  const from = acceptPlaceCandidate(m[1]!);
+  const to = acceptPlaceCandidate(m[2]!);
+  if (from) result.from = from;
+  if (to) result.to = to;
+  return result;
+}
+
+const CN_NUMERALS: Record<string, number> = {
+  一: 1,
+  二: 2,
+  两: 2,
+  三: 3,
+  四: 4,
+  五: 5,
+  六: 6,
+  七: 7,
+  八: 8,
+  九: 9,
+  十: 10,
+};
+
+function extractPassengers(text: string): number | undefined {
+  const digit = text.match(/(\d+)\s*(?:人|位|张|名)(?:票)?/) || text.match(/^(\d+)$/);
+  if (digit) {
+    const n = Number(digit[1]);
+    if (n >= 1 && n <= 10) return n;
+  }
+  const cn = text.match(/([一二三四五六七八九十两])\s*(?:人|位|张|名)(?:票)?/);
+  if (cn) {
+    const n = CN_NUMERALS[cn[1]!];
+    if (n != null && n >= 1 && n <= 10) return n;
+  }
+  if (/一个人|一人|一位|单人|一张/.test(text)) return 1;
+  if (/两个人|两人|两位|双人|两张/.test(text)) return 2;
   return undefined;
 }
 
 function extractSeat(text: string): string | undefined {
   const m = text.match(/(商务座|特等座|一等座|二等座|软卧|硬卧|软座|硬座|无座)/);
-  return m?.[1];
+  if (m) return m[1];
+  // Synonyms without 座 suffix (e.g. 「二等，两张票」)
+  if (/(?<![一特])二等(?!座)/.test(text)) return "二等座";
+  if (/(?<![二特])一等(?!座)/.test(text)) return "一等座";
+  if (/商务(?!座|舱)/.test(text)) return "商务座";
+  if (/特等(?!座)/.test(text)) return "特等座";
+  return undefined;
 }
 
 function extractCabin(text: string): string | undefined {
@@ -224,6 +297,12 @@ function extractTimeWindow(text: string): string | undefined {
   if (/不限|任意|都行|无所谓/.test(text)) return "不限";
   const range = text.match(/(\d{1,2}:\d{2})\s*[-~～到至]\s*(\d{1,2}:\d{2})/);
   if (range) return `${range[1]}-${range[2]}`;
+  const cnRange = text.match(/(\d{1,2})\s*[:：点]\s*(?:(\d{2})\s*)?[-~～到至]\s*(\d{1,2})\s*[:：点]?\s*(\d{2})?/);
+  if (cnRange) {
+    const a = `${cnRange[1]!.padStart(2, "0")}:${(cnRange[2] ?? "00").padStart(2, "0")}`;
+    const b = `${cnRange[3]!.padStart(2, "0")}:${(cnRange[4] ?? "00").padStart(2, "0")}`;
+    return `${a}-${b}`;
+  }
   if (/上午|早上|早晨/.test(text)) return "06:00-12:00";
   if (/中午/.test(text)) return "11:00-14:00";
   if (/下午/.test(text)) return "12:00-18:00";
@@ -321,6 +400,17 @@ export function applyShortAnswer(
   }
   if (field === "from" || field === "to" || field === "venue" || field === "eventName") {
     if (/未知|没有|无|不详/.test(t) && field === "venue") return { venue: "未知" };
+    if ((field === "from" || field === "to") && t.length >= 1 && t.length <= 40) {
+      // Train: allowlist only. Flight/other: reject digit/date garbage but allow free text.
+      if (/\d{4}|[./]/.test(t) || /到|去|至/.test(t)) return {};
+      const place = acceptPlaceCandidate(t);
+      if (place) return { [field]: place };
+      // Non-allowlist short answers still accepted for disambiguation retries only if no digits
+      if (!/\d/.test(t) && /^[\u4e00-\u9fffA-Za-z]{2,20}$/.test(t.trim())) {
+        return { [field]: t.trim() };
+      }
+      return {};
+    }
     if (t.length >= 1 && t.length <= 40) return { [field]: t };
   }
   if (field === "date") {
@@ -372,7 +462,10 @@ export function nextMissingField(fields: IntakeFields): keyof IntakeFields | nul
     if (v === undefined || v === null || v === "") return f;
     // City-only 北京/上海 etc. must be disambiguated to exact station before confirm
     if ((f === "from" || f === "to") && (fields.channel === "train" || fields.channel === "flight")) {
+      if (fields.channel === "train" && !isKnownTrainStationName(String(v))) return f;
       if (isAmbiguousCityPlace(String(v))) return f;
+      // Reject digit/date garbage on any channel
+      if (/\d/.test(String(v)) || /[./]/.test(String(v)) || /到|去|至/.test(String(v))) return f;
     }
   }
   return null;
@@ -526,8 +619,14 @@ export function processTurn(
     /* still ask */
   }
 
-  // If city-only places were captured, clear them so confirm cannot proceed on ambiguous stations
-  if ((fields.channel === "train" || fields.channel === "flight")) {
+  // Drop invalid / garbage station tokens; never confirm with date fragments or fakes
+  if (fields.channel === "train" || fields.channel === "flight") {
+    const dropBad = (v?: string) =>
+      !v || /\d/.test(v) || /[./]/.test(v) || /到|去|至/.test(v) ||
+      (fields.channel === "train" && !isKnownTrainStationName(v));
+    if (dropBad(fields.from)) delete fields.from;
+    if (dropBad(fields.to)) delete fields.to;
+    // If city-only places were captured, clear them so confirm cannot proceed on ambiguous stations
     if (isAmbiguousCityPlace(fields.from)) {
       fields.fromCity = fields.fromCity ?? String(fields.from);
       delete fields.from;

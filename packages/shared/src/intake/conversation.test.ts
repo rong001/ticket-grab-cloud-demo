@@ -4,6 +4,7 @@ import {
   createEmptySession,
   processTurn,
   toRequestPayload,
+  isValidStationToken,
 } from "./conversation.js";
 
 describe("conversational intake", () => {
@@ -45,7 +46,6 @@ describe("conversational intake", () => {
     r = processTurn(r.session, "周杰伦演唱会");
     assert.ok(r.session.fields.eventName);
   });
-});
 
   it("asks exact stations for city-only 北京/上海", () => {
     let s = createEmptySession();
@@ -67,7 +67,6 @@ describe("conversational intake", () => {
     assert.equal(r.session.fields.from, "广州南");
     assert.equal(r.session.fields.to, "深圳北");
     assert.equal(r.readyForConfirm, false);
-    // date should remain unset (weekday ambiguous)
     assert.equal(r.session.fields.date, undefined);
     assert.ok(/日期|YYYY-MM-DD|确切/.test(r.reply), `expected date ask, got: ${r.reply}`);
   });
@@ -77,7 +76,14 @@ describe("conversational intake", () => {
     let r = processTurn(s, "周杰伦演唱会上海");
     assert.equal(r.session.fields.channel, "show");
     assert.equal(r.readyForConfirm, false);
-    assert.ok(r.missing === "venue" || r.missing === "date" || r.missing === "eventName" || r.missing === "tier" || r.missing === "passengers" || r.missing === "grabStartAt");
+    assert.ok(
+      r.missing === "venue" ||
+        r.missing === "date" ||
+        r.missing === "eventName" ||
+        r.missing === "tier" ||
+        r.missing === "passengers" ||
+        r.missing === "grabStartAt"
+    );
   });
 
   it("asks 票档 for show after date (does not treat YYYY-MM-DD as tier)", () => {
@@ -93,3 +99,93 @@ describe("conversational intake", () => {
     assert.ok(/票档/.test(r.reply), r.reply);
     assert.equal(r.readyForConfirm, false);
   });
+});
+
+describe("P1 Chinese intake parsing", () => {
+  it("does not glue YYYY-MM-DD onto stations; parses 两张", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "2026-09-29北京南到上海虹桥，08:00-10:00，二等座，两张"
+    );
+    assert.equal(r.session.fields.channel, "train");
+    assert.equal(r.session.fields.from, "北京南");
+    assert.equal(r.session.fields.to, "上海虹桥");
+    assert.equal(r.session.fields.date, "2026-09-29");
+    assert.equal(r.session.fields.timeWindow, "08:00-10:00");
+    assert.equal(r.session.fields.seatClass, "二等座");
+    assert.equal(r.session.fields.passengers, 2);
+    assert.notEqual(r.missing, "passengers");
+    assert.notEqual(r.session.fields.from, "2026-09");
+  });
+
+  it("parses spaced synonym with 两人", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "2026-09-29 北京南到上海虹桥 08:00-10:00 二等座 两人"
+    );
+    assert.equal(r.session.fields.from, "北京南");
+    assert.equal(r.session.fields.to, "上海虹桥");
+    assert.equal(r.session.fields.passengers, 2);
+    assert.equal(r.session.fields.date, "2026-09-29");
+  });
+
+  it("parses 9月29日 + arrow + 二等 + 两张票", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "9月29日北京南→上海虹桥，上午8点到10点，二等，两张票"
+    );
+    assert.equal(r.session.fields.from, "北京南");
+    assert.equal(r.session.fields.to, "上海虹桥");
+    assert.equal(r.session.fields.passengers, 2);
+    assert.equal(r.session.fields.seatClass, "二等座");
+    assert.ok(r.session.fields.date?.endsWith("-09-29"));
+    assert.equal(r.session.fields.timeWindow, "08:00-10:00");
+  });
+
+  it("parses date after stations + 2张", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "北京南到上海虹桥 2026-09-29 二等座 2张"
+    );
+    assert.equal(r.session.fields.from, "北京南");
+    assert.equal(r.session.fields.to, "上海虹桥");
+    assert.equal(r.session.fields.date, "2026-09-29");
+    assert.equal(r.session.fields.passengers, 2);
+  });
+
+  it("rejects fake stations — no confirmation card", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "2026-09-29假车站到另一个假站，二等座，两张"
+    );
+    assert.equal(r.session.fields.channel, "train");
+    assert.equal(r.session.fields.from, undefined);
+    assert.equal(r.session.fields.to, undefined);
+    assert.equal(r.readyForConfirm, false);
+    assert.equal(r.confirmation, undefined);
+    assert.ok(r.missing === "from" || r.missing === "to");
+  });
+
+  it("rejects digit-only / date-looking from/to tokens", () => {
+    assert.equal(isValidStationToken("2026-09"), false);
+    assert.equal(isValidStationToken("29北京南到上海虹桥"), false);
+    assert.equal(isValidStationToken("12345"), false);
+    assert.equal(isValidStationToken("北京南"), true);
+    assert.equal(isValidStationToken("上海虹桥"), true);
+  });
+
+  it("parses Chinese numerals 三张 / 一个人 / 2位", () => {
+    let r = processTurn(createEmptySession(), "北京南到上海虹桥 三张 二等座");
+    assert.equal(r.session.fields.passengers, 3);
+    r = processTurn(createEmptySession(), "北京南到广州南 一个人 二等座");
+    assert.equal(r.session.fields.passengers, 1);
+    r = processTurn(createEmptySession(), "深圳北到广州南 2位 一等座");
+    assert.equal(r.session.fields.passengers, 2);
+  });
+
+  it("partial route keeps asking; no confirm", () => {
+    const r = processTurn(createEmptySession(), "只要北京南出发，二等座，两张");
+    assert.equal(r.readyForConfirm, false);
+    assert.ok(!r.confirmation);
+  });
+});
