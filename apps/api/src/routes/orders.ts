@@ -18,6 +18,7 @@ import { authenticate } from "../lib/auth.js";
 import { logActivity } from "../lib/activity.js";
 import { decryptSensitive, encryptSensitive } from "../lib/crypto.js";
 import { env } from "../env.js";
+import { dryRunMode, stubMode, trainRealSubmitEnabled } from "../lib/bookingFlags.js";
 import {
   fromPrismaOrderStatus,
   fromPrismaPlatform,
@@ -28,16 +29,6 @@ import {
 
 function asJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
-}
-
-function stubMode(): boolean {
-  // BOOKING_STUB=0 forces real path even when PROVIDER_MODE=fixture (search can stay fixture).
-  if (process.env.BOOKING_STUB === "0") return false;
-  return env.providerMode === "fixture" || process.env.BOOKING_STUB === "1";
-}
-
-function dryRunMode(): boolean {
-  return process.env.TRAIN_BOOKING_DRY_RUN === "1";
 }
 
 function publicOrder(row: {
@@ -315,6 +306,21 @@ export async function orderRoutes(app: FastifyInstance) {
     const order = await prisma.order.findFirst({ where: { id, userId: user.sub } });
     if (!order) return reply.code(404).send({ error: "Not found" });
 
+    // Hard gate: live 12306 assistive submit requires explicit TRAIN_REAL_SUBMIT=1.
+    // Stub mode remains available for demos. Intake/watch never call this path.
+    if (
+      order.channel === "train" &&
+      !stubMode() &&
+      !trainRealSubmitEnabled()
+    ) {
+      return reply.code(403).send({
+        error: "train_submit_disabled",
+        message:
+          "12306 assistive submit is disabled on this deployment (TRAIN_REAL_SUBMIT≠1). Monitor/notify and official redirect remain available; pay on official 12306.",
+        trainRealSubmit: false,
+      });
+    }
+
     const current = fromPrismaOrderStatus(order.status);
     if (current === "paid" || current === "cancelled") {
       return reply.code(400).send({ error: `Cannot submit from status ${current}` });
@@ -424,6 +430,7 @@ export async function orderRoutes(app: FastifyInstance) {
           bookingMode: {
             stub: stubMode(),
             dryRun: dryRunMode(),
+            trainRealSubmit: trainRealSubmitEnabled(),
           },
         }),
       },

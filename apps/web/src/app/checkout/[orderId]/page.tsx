@@ -34,6 +34,8 @@ type OrderDetail = {
 type BookingMode = {
   bookingStub?: boolean;
   trainBookingDryRun?: boolean;
+  trainLiveQuery?: boolean;
+  trainRealSubmit?: boolean;
   realTrainSubmit?: boolean;
 };
 
@@ -92,22 +94,35 @@ function resolvePlatform(data: OrderDetail): string {
   return CHANNEL_COPY[data.channel]?.platformDefault ?? "12306";
 }
 
-function ModeBanner({ mode, orderMode }: { mode: BookingMode | null; orderMode?: { stub?: boolean; dryRun?: boolean } }) {
+function ModeBanner({ mode, orderMode }: { mode: BookingMode | null; orderMode?: { stub?: boolean; dryRun?: boolean; trainRealSubmit?: boolean } }) {
   const stub = orderMode?.stub ?? mode?.bookingStub ?? true;
   const dry = orderMode?.dryRun ?? mode?.trainBookingDryRun;
-  if (!stub) {
+  const submitOn =
+    orderMode?.trainRealSubmit === true ||
+    mode?.trainRealSubmit === true ||
+    mode?.realTrainSubmit === true;
+  if (stub) {
     return (
       <p className="info-banner">
-        <span className="badge available">真实下单</span>{" "}
-        12306 真实模式
-        {dry ? " · DRY RUN（最终确认前停止）" : ""}
+        <span className="badge">演示模式</span>{" "}
+        外部单号为 STUB-*，非真实购票
+      </p>
+    );
+  }
+  if (!submitOn) {
+    return (
+      <p className="info-banner">
+        <span className="badge">下单关闭</span>{" "}
+        12306 协助提交已关闭（TRAIN_REAL_SUBMIT≠1）。请走官方 12306 支付。
+        {mode?.trainLiveQuery ? " · 实时查票 ON" : ""}
       </p>
     );
   }
   return (
     <p className="info-banner">
-      <span className="badge">演示模式</span>{" "}
-      外部单号为 STUB-*，非真实购票
+      <span className="badge available">协助下单已开启</span>{" "}
+      需本人会话 + 显式提交；非无人值守自动购票
+      {dry ? " · DRY RUN（最终确认前停止）" : ""}
     </p>
   );
 }

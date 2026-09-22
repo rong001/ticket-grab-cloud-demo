@@ -114,6 +114,21 @@ export const trainBookingAdapter: BookingAdapter = {
     }
 
     // —— Real path ——
+    // Explicit kill-switch (default OFF). BOOKING_STUB=0 alone must NOT imply submit is live.
+    if (process.env.TRAIN_REAL_SUBMIT !== "1" && process.env.TRAIN_SUBMIT_ENABLED !== "1") {
+      return {
+        status: "failed",
+        nextSteps: [
+          "本部署已关闭 12306 协助下单（TRAIN_REAL_SUBMIT≠1）",
+          "请前往官方 12306 App / 网站完成购票与支付",
+          "本站仍可查票、盯票通知与官方跳转",
+        ],
+        notes: "train_submit_disabled",
+        confirmation: { confirmed: false, source: "none" },
+        errorMessage: "train_submit_disabled",
+      };
+    }
+
     const cookiesRaw = input.session.cookies;
     if (!cookiesRaw || (typeof cookiesRaw === "string" && !cookiesRaw.trim())) {
       return {

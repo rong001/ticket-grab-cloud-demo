@@ -320,7 +320,16 @@ export async function submitTrainOrder(
     };
   }
 
-  // 6) confirmSingleForQueue
+  // 6) confirmSingleForQueue — hard stop unless TRAIN_REAL_SUBMIT=1 (or legacy alias)
+  if (process.env.TRAIN_REAL_SUBMIT !== "1" && process.env.TRAIN_SUBMIT_ENABLED !== "1") {
+    return {
+      status: "failed",
+      cookies: jar,
+      message: "train_real_submit_required",
+      errorCode: "train_submit_disabled",
+    };
+  }
+
   const confirm = await request12306<{
     status?: boolean;
     data?: { submitStatus?: boolean; errMsg?: string };

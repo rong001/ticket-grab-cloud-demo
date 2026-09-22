@@ -109,6 +109,7 @@ export default function CapabilitiesPage() {
       <h2 className="section-title">PROVIDER_MODE=live 含义</h2>
       <p>
         仅表示搜索适配器尝试访问上游公开数据源。它不表示本站已获得自动购票、批量占座或第三方售票授权。
+        协助下单另需显式开启 <code>TRAIN_REAL_SUBMIT=1</code>（默认关闭）；未开启时 <code>/health.trainRealSubmit=false</code>，提交接口返回禁用。
         任何「一键抢到」的宣传都不适用于本站。
       </p>
 

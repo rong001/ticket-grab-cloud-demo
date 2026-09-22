@@ -17,6 +17,9 @@ type PlatformRow = {
 type BookingMode = {
   bookingStub?: boolean;
   trainBookingDryRun?: boolean;
+  trainLiveQuery?: boolean;
+  trainRealSubmit?: boolean;
+  /** @deprecated use trainRealSubmit */
   realTrainSubmit?: boolean;
 };
 
@@ -81,19 +84,29 @@ const HANDOFF: Record<string, { title: string; steps: string[]; tip: string }> =
 
 function ModeBanner({ mode }: { mode: BookingMode | null }) {
   if (!mode) return null;
-  if (mode.realTrainSubmit) {
+  const submitOn = mode.trainRealSubmit === true || mode.realTrainSubmit === true;
+  if (submitOn && !mode.bookingStub) {
     return (
       <p className="info-banner">
-        <span className="badge available">真实下单</span>{" "}
-        BOOKING_STUB 已关闭
+        <span className="badge available">协助下单已开启</span>{" "}
+        TRAIN_REAL_SUBMIT=1（需本人会话 + 显式提交；非无人值守自动购票）
         {mode.trainBookingDryRun ? " · DRY RUN（最终确认前停止）" : ""}
+      </p>
+    );
+  }
+  if (mode.bookingStub) {
+    return (
+      <p className="info-banner">
+        <span className="badge">演示模式</span>{" "}
+        不会调用真实 12306 下单（BOOKING_STUB）
       </p>
     );
   }
   return (
     <p className="info-banner">
-      <span className="badge">演示模式</span>{" "}
-      不会调用真实 12306 下单
+      <span className="badge">下单关闭</span>{" "}
+      查票/盯票/官方跳转可用；12306 协助提交已关闭（TRAIN_REAL_SUBMIT≠1）
+      {mode.trainLiveQuery ? " · 实时查票 ON" : ""}
     </p>
   );
 }

@@ -16,6 +16,7 @@ import { authenticate } from "../lib/auth.js";
 import { logActivity } from "../lib/activity.js";
 import { decryptSensitive, encryptSensitive } from "../lib/crypto.js";
 import { fromPrismaPlatform, toPrismaPlatform } from "../lib/platformMap.js";
+import { resolveBookingFlags } from "../lib/bookingFlags.js";
 
 function publicCred(row: {
   id: string;
@@ -42,14 +43,13 @@ function publicCred(row: {
 }
 
 function bookingMode() {
-  // BOOKING_STUB=0 forces real train path even if PROVIDER_MODE=fixture.
-  let stub = process.env.PROVIDER_MODE === "fixture" || process.env.BOOKING_STUB === "1";
-  if (process.env.BOOKING_STUB === "0") stub = false;
-  const dryRun = process.env.TRAIN_BOOKING_DRY_RUN === "1";
+  const f = resolveBookingFlags();
   return {
-    bookingStub: stub,
-    trainBookingDryRun: dryRun,
-    realTrainSubmit: !stub,
+    bookingStub: f.bookingStub,
+    trainBookingDryRun: f.trainBookingDryRun,
+    trainLiveQuery: f.trainLiveQuery,
+    trainRealSubmit: f.trainRealSubmit,
+    realTrainSubmit: f.realTrainSubmit,
   };
 }
 

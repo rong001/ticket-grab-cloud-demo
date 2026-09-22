@@ -205,3 +205,13 @@ SSH / admin passwords are **not** published. Do not touch `a-commerce-os` or hos
 - Three-channel ToC closed loop (register → intake → confirm → persistent watch → restart rehydrate → list/detail consistent → cancel+reason): **PASS** under API (+ UI shots).
 - **P1e: 通过** (unchanged).
 - **整体产品仍待端到端独立验收** — email notify and full product sign-off are **not** claimed here.
+
+---
+
+## Train submit honesty (2026-09-22)
+
+- Live `/api/health` now reports `trainLiveQuery` + `trainRealSubmit=false` (default).
+- Deprecated `realTrainSubmit` previously meant `!bookingStub` (misleading); now aliases real submit opt-in.
+- `TRAIN_REAL_SUBMIT=0` on live; `POST /orders/:id/submit` returns 403 `train_submit_disabled`.
+- See `REAL_TRAIN_SUBMIT_AUDIT.md`. Overall product still 待验收; P1e still 通过.
+- TOC scripts use TLS verify (`curl -sS`), not `-k`.

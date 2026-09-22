@@ -2,6 +2,10 @@
 # ToC closed-loop retest recipe (train / show / flight)
 # Third parties MUST create their OWN account via public register.
 # This script never embeds passwords. Pass EMAIL/PASSWORD or TOKEN yourself.
+# TLS: use normal certificate verification (no curl -k). Live IP uses a Let's Encrypt
+# certificate with IP SAN for 159.75.71.192 — stock CA stores should verify.
+# If a client rejects IP SANs, upgrade the CA bundle / curl; do not disable verify.
+
 #
 # Register UI: https://159.75.71.192:18444/register
 # Live base:   https://159.75.71.192:18444
@@ -35,7 +39,7 @@ print("" if o is None else o)' "$1"
 }
 api() {
   local method="$1" path="$2" body="${3:-}"
-  local args=(-sk -X "$method" -H "content-type: application/json" -H "accept: application/json")
+  local args=(-sS -X "$method" -H "content-type: application/json" -H "accept: application/json")
   if [[ -n "${TOKEN:-}" ]]; then args+=(-H "Authorization: Bearer ${TOKEN}"); fi
   if [[ -n "$body" ]]; then args+=(-d "$body"); fi
   curl "${args[@]}" "${API_BASE}${path}"

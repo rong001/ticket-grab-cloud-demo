@@ -5,6 +5,7 @@ import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { ZodError } from "zod";
 import { env } from "./env.js";
+import { resolveBookingFlags } from "./lib/bookingFlags.js";
 import { authRoutes } from "./routes/auth.js";
 import { requestRoutes } from "./routes/requests.js";
 import { travelerRoutes } from "./routes/travelers.js";
@@ -181,15 +182,16 @@ export async function buildApp() {
   });
 
   app.get("/health", async () => {
-    let bookingStub =
-      env.providerMode === "fixture" || process.env.BOOKING_STUB === "1";
-    if (process.env.BOOKING_STUB === "0") bookingStub = false;
+    const flags = resolveBookingFlags();
     return {
       ok: true,
-      providerMode: env.providerMode,
-      bookingStub,
-      trainBookingDryRun: process.env.TRAIN_BOOKING_DRY_RUN === "1",
-      realTrainSubmit: !bookingStub,
+      providerMode: flags.providerMode,
+      bookingStub: flags.bookingStub,
+      trainBookingDryRun: flags.trainBookingDryRun,
+      trainLiveQuery: flags.trainLiveQuery,
+      trainRealSubmit: flags.trainRealSubmit,
+      // Deprecated: now equals trainRealSubmit&&!bookingStub (was !bookingStub — misleading).
+      realTrainSubmit: flags.realTrainSubmit,
     };
   });
 
