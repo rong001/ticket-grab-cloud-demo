@@ -128,33 +128,4 @@ Booking-related values after fix:
 
 ## 9. Public commit SHA
 
-`54f7766381e2f216e6ab0f5b63a0e75524b5e9d9`
-
-
----
-
-## Deploy evidence (2026-09-22)
-
-### TLS probe log
-```
-curl -sS https://159.75.71.192:18444/api/health
-→ http=200 ssl_verify_result=0
-cert: Let's Encrypt YE2; SAN critical IP Address:159.75.71.192
-(no curl -k required on stock CA store)
-```
-
-### Gate probe log
-```
-POST /orders/.../submit (no Auth) → 401 Unauthorized
-POST /orders/<other-user>/submit → 404 Not found
-POST /orders/<own-train>/submit with TRAIN_REAL_SUBMIT=0 → 403 train_submit_disabled
-intake.ts: no confirmSingleForQueue / submitTrainOrder references
-```
-
-### Grep: submit Order URLs are gated
-```
-packages/shared/src/booking/12306/order.ts
-  submitOrderRequest / initDc / checkOrderInfo / confirmSingleForQueue
-  confirmSingleForQueue preceded by TRAIN_REAL_SUBMIT gate (default off)
-apps/api/src/routes/orders.ts POST /orders/:id/submit → 403 when disabled
-```
+`ff8284f6d0a65d611701ca9e6a6b8f7de66bf430` (honesty fix parent: `54f7766`)
