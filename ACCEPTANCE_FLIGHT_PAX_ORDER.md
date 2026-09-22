@@ -58,21 +58,21 @@ curl -sS "$BASE/health" | jq '{trainRealSubmit,bookingStub,flightInventoryLive,p
 
 ## Commit SHAs
 
-- Private:  (docs tip )
-- Public demo:  — https://github.com/rong001/ticket-grab-cloud-demo/commit/76b63b26547316691acaa104eb2d3b540e89ab2d
+- Private: `31dfda349913cf39804cdbce1b711cb7ac4a3ee1` (docs tip `f08cbe3e057aeb8592e989b45f5ce7ae7c75f730`)
+- Public demo: `76b63b26547316691acaa104eb2d3b540e89ab2d` — https://github.com/rong001/ticket-grab-cloud-demo/commit/76b63b26547316691acaa104eb2d3b540e89ab2d  
+  (docs tip `39089443a10f21fb7b956f39de1a840da69d5d16` — https://github.com/rong001/ticket-grab-cloud-demo/commit/39089443a10f21fb7b956f39de1a840da69d5d16)
 
 ## Live evidence
 
--  → , , , ,  (scheduleConfigured may be true; scheduleLive false under OpenSky 429)
-- Host : , 
-- UI HTTP 200: , ,  (乘机人 copy present)
-- Synthetic register (emailFp ) → 2 travelers (hints  / ; no full ID)
-- Flight request passengers=2 → watch with 2 travelerIds (OpenSky 429 → degraded watch, no tickets_found)
-- scheduleOnly shortlist item (flagged, not sellable) →  → **201** draft, channel=flight, 2 traveler summaries, , , nextSteps include 待接入/Amadeus
-- Second create-order → same orderId, 
--  → **403** , status remains  (not paid)
-- Commerce :80/:443 untouched (443 still 200)
-
+- `GET /api/health` → `ok=true`, `trainRealSubmit=false`, `bookingStub=false`, `providerMode=live`, `flightInventoryLive=false` (scheduleConfigured may be true; scheduleLive false under OpenSky 429)
+- Host `.env.production` still `TRAIN_REAL_SUBMIT=0`, `BOOKING_STUB=0`
+- UI HTTP 200: `/`, `/grabs`, `/travelers` (乘机人)
+- Synthetic register (emailFp `a47c12febbb8`) → 2 travelers (hints `****4018` / `****1237`; no full ID)
+- Flight request passengers=2 → watch with 2 travelerIds (OpenSky 429 → degraded; no tickets_found)
+- scheduleOnly shortlist item (flagged not sellable) → `POST /grabs/:id/create-order` → **201** draft, channel=flight, 2 traveler summaries, flightAutoBuy=false, scheduleOnly=true, nextSteps include Amadeus/待接入
+- Second create-order → same orderId, `reused=true`
+- `POST /orders/:id/submit` → **403** `FLIGHT_INVENTORY_UNAVAILABLE`, status remains `draft` (not paid)
+- Commerce :80/:443 untouched
 
 ## Remaining main blocker
 
