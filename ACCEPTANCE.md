@@ -29,3 +29,7 @@ Scope: Chinese conversational intake, persistent watch jobs, honest capability c
 - `/api/grabs` list may omit jobs whose `startsAt` is far in the future (UI should still show via request detail).
 - Show/flight are monitor + official redirect only (by design; no unauthorized auto-purchase).
 - Conversational parser is rule-based (no LLM); unusual phrasing may need follow-up turns.
+
+## Far-future /api/grabs fix
+
+See `ACCEPTANCE_FAR_FUTURE.md` / `/workspace/FAR_FUTURE_E2E.md` — queued far-future watches now listed; rehydrate+cancel verified.

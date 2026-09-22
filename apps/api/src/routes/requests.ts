@@ -51,22 +51,31 @@ export async function requestRoutes(app: FastifyInstance) {
     });
   });
 
-  /** 我的定时抢票 — active / pending watches across channels */
+  /** 我的定时盯票 — all non-terminal watches (incl. far-future queued), regardless of startsAt */
   app.get("/grabs", {
     schema: {
       tags: ["requests"],
-      summary: "List active scheduled grab (watch) jobs",
+      summary: "List scheduled grab/watch jobs (includes queued far-future startsAt)",
       security: [{ bearerAuth: [] }],
     },
   }, async (request) => {
     const user = await authenticate(request);
     const statusFilter = (request.query as { status?: string }).status;
+    /** Default = in-progress lifecycle (queued stays until startsAt; not only active/pending). */
+    const LIVE_STATUSES = [
+      "queued",
+      "querying",
+      "has_tickets",
+      "notified",
+      "pending",
+      "active",
+    ] as const;
     const statuses =
       statusFilter === "all"
         ? undefined
         : statusFilter
           ? [statusFilter]
-          : ["active", "pending"];
+          : [...LIVE_STATUSES];
 
     const jobs = await prisma.watchJob.findMany({
       where: {
@@ -86,9 +95,28 @@ export async function requestRoutes(app: FastifyInstance) {
         },
       },
     });
+    // Explicit field projection so list/detail consumers always see lifecycle metadata
+    // (Prisma already returns scalars; map keeps contract stable if select is tightened later).
     return {
-      items: jobs,
-      labelZh: "我的定时抢票",
+      items: jobs.map((j) => ({
+        id: j.id,
+        requestId: j.requestId,
+        status: j.status,
+        statusReason: j.statusReason ?? null,
+        statusChangedAt: j.statusChangedAt ?? null,
+        intervalMinutes: j.intervalMinutes,
+        startsAt: j.startsAt ?? null,
+        endsAt: j.endsAt ?? null,
+        autoOrder: j.autoOrder,
+        preferences: j.preferences ?? null,
+        lastRunAt: j.lastRunAt ?? null,
+        nextRunAt: j.nextRunAt ?? null,
+        bullJobId: j.bullJobId ?? null,
+        createdAt: j.createdAt,
+        updatedAt: j.updatedAt,
+        request: j.request,
+      })),
+      labelZh: "我的定时盯票",
       limits:
         "Watch + notify + optional assistive auto-create awaiting_login order. No captcha/SMS/face/queue/payment bypass.",
     };

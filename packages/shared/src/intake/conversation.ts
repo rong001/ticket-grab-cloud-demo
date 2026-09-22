@@ -63,8 +63,8 @@ const FIELD_ORDER_FLIGHT: (keyof IntakeFields)[] = [
 
 const QUESTIONS: Record<string, string> = {
   channel: "请问您要找哪类票？回复「火车」「演出」或「机票」。",
-  from: "请告诉我出发站/出发城市（尽量写全称，例如「北京南」或「深圳宝安」）。",
-  to: "请告诉我到达站/到达城市（尽量写全称，例如「上海虹桥」）。",
+  from: "请告诉我确切出发站（不要只写城市）。例如「北京南」「北京西」「北京站」。",
+  to: "请告诉我确切到达站（不要只写城市）。例如「上海虹桥」「上海南」「上海站」。",
   eventName: "请告诉我演出/活动名称（可附带城市）。",
   venue: "演出场馆是哪里？（没有可回复「未知」）。",
   date: "出行/观演日期是哪天？（格式 YYYY-MM-DD，或「明天」「下周五」）。",
@@ -98,20 +98,10 @@ function normalizeDateToken(raw: string, now = new Date()): string | undefined {
     d.setDate(d.getDate() + 2);
     return isoDate(d);
   }
-  const weekMap: Record<string, number> = {
-    日: 0, 天: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6,
-  };
-  const wm = s.match(/下?周([日天一二三四五六])/);
-  if (wm) {
-    const target = weekMap[wm[1]!];
-    if (target != null) {
-      const d = new Date(now);
-      const cur = d.getDay();
-      let add = (target - cur + 7) % 7;
-      if (add === 0 || /下周/.test(s)) add += 7;
-      d.setDate(d.getDate() + add);
-      return isoDate(d);
-    }
+  // Weekday-only (周五 / 下周一) is ambiguous without calendar confirm — do not auto-fill.
+  // Caller will ask for exact YYYY-MM-DD via nextMissingField("date").
+  if (/下?周[日天一二三四五六]/.test(s)) {
+    return undefined;
   }
   return undefined;
 }
@@ -147,28 +137,65 @@ function parseGrabStart(raw: string, now = new Date()): string | undefined {
     if (d.getTime() < now.getTime()) d.setDate(d.getDate() + 1);
     return d.toISOString();
   }
-  const dateOnly = normalizeDateToken(s, now);
-  if (dateOnly) {
-    return new Date(`${dateOnly}T00:00:00+08:00`).toISOString();
-  }
+  // Date-only strings fill the date field, not grabStartAt — require explicit time / 现在.
   return undefined;
 }
 
 function detectChannel(text: string): IntakeChannel | undefined {
-  if (/火车|高铁|动车|列车|12306|火车票/.test(text)) return "train";
+  if (/火车|高铁|动车|列车|12306|火车票|席别|二等座|一等座|商务座|硬卧|软卧/.test(text)) return "train";
   if (/演出|演唱会|音乐会|话剧|大麦|猫眼|门票|票档/.test(text)) return "show";
   if (/机票|航班|飞机|民航|机场/.test(text)) return "flight";
   if (/^火车$|^高铁$|^列车$/.test(text.trim())) return "train";
   if (/^演出$|^演唱会$|^门票$/.test(text.trim())) return "show";
   if (/^机票$|^航班$|^飞机$/.test(text.trim())) return "flight";
+  // Infer train when utterance looks like 站到站 with station suffixes
+  if (/[\u4e00-\u9fff]{2,8}[东西南北站]?\s*(?:到|去|至|→)\s*[\u4e00-\u9fff]{2,8}[东西南北站]?/.test(text) &&
+      /[东西南北]站?|火车站|高铁站/.test(text)) {
+    return "train";
+  }
   return undefined;
 }
 
+const MULTI_STATION_CITIES = new Set([
+  "北京", "上海", "广州", "深圳", "杭州", "成都", "重庆", "武汉", "西安",
+  "南京", "天津", "长沙", "郑州", "沈阳", "哈尔滨", "昆明", "厦门", "福州",
+  "青岛", "济南", "合肥", "南昌", "石家庄", "太原", "南宁", "贵阳", "兰州",
+]);
+
+/** True when place is a city name without a concrete station/airport suffix. */
+export function isAmbiguousCityPlace(place?: string): boolean {
+  if (!place) return false;
+  const p = place.trim().replace(/市$/, "");
+  if (/[东西南北]站$|站$|机场$|虹桥|浦东|宝安|萧山|双流|天府|北苑|南站|北站|东站|西站/.test(p)) {
+    return false;
+  }
+  // e.g. 北京南 / 上海虹桥 already concrete
+  if (/[东西南北]$/.test(p) && p.length >= 3) return false;
+  if (MULTI_STATION_CITIES.has(p)) return true;
+  return false;
+}
+
+function cleanPlaceToken(raw: string): string {
+  return raw
+    .trim()
+    .replace(/(?:高铁|动车|列车|火车|机票|航班)$/g, "")
+    .replace(/[的]?票$/g, "")
+    .trim();
+}
+
 function extractFromTo(text: string): { from?: string; to?: string } {
+  // Prefer "从A到B"; avoid swallowing leading date words like 下周/周五
+  const cleaned = text
+    .replace(/下?周[日天一二三四五六]?/g, " ")
+    .replace(/本周/g, " ")
+    .replace(/今天|明天|后天|今晚|周末/g, " ")
+    .replace(/早上|早晨|上午|中午|下午|傍晚|晚上|夜间/g, " ");
   const m =
-    text.match(/从\s*([^\s到去→\-—]{2,20})\s*(?:到|去|至|→|-|—)\s*([^\s,，。的]{2,20})/) ||
-    text.match(/([^\s]{2,12})\s*(?:到|去|至|→|->|-|—)\s*([^\s,，。的]{2,12})/);
-  if (m) return { from: m[1]!.trim(), to: m[2]!.trim() };
+    cleaned.match(/从\s*([^\s到去→\-—]{2,20})\s*(?:到|去|至|→|-|—)\s*([^\s,，。的]{2,20})/) ||
+    cleaned.match(/([^\s]{2,12})\s*(?:到|去|至|→|->|-|—)\s*([^\s,，。的]{2,12})/);
+  if (m) {
+    return { from: cleanPlaceToken(m[1]!), to: cleanPlaceToken(m[2]!) };
+  }
   return {};
 }
 
@@ -263,9 +290,13 @@ export function extractIntakePatch(text: string, current: IntakeFields, now = ne
   if (/不限|任意|都行/.test(text) && ch === "flight" && !current.cabin) patch.cabin = "不限";
 
   if (ch === "show") {
-    const tierM = text.match(/(\d{2,5}\s*元?|[A-Z]区|内场|看台|VIP|票档\s*\S+)/i);
-    if (tierM && !current.tier) patch.tier = tierM[1]!.trim();
-    if (/不限|任意|都行/.test(text) && !current.tier) patch.tier = "不限";
+    // Do not treat YYYY-MM-DD (or bare year 20xx) as a ticket tier.
+    const looksLikeDate = /\d{4}[-/.年]\d{1,2}([-/.月]\d{1,2})?/.test(text) || /^20\d{2}$/.test(text.trim());
+    if (!looksLikeDate) {
+      const tierM = text.match(/(?:票档\s*)?(\d{2,5}\s*元|[A-Z]区|内场|看台|VIP)|票档\s*(\S+)/i);
+      if (tierM && !current.tier) patch.tier = (tierM[1] || tierM[2])!.trim();
+    }
+    if (/不限|任意|都行/.test(text) && !current.tier && !looksLikeDate) patch.tier = "不限";
   }
 
   const pax = extractPassengers(text);
@@ -319,7 +350,10 @@ export function applyShortAnswer(
   }
   if (field === "grabStartAt") {
     const g = parseGrabStart(t, now);
-    return g ? { grabStartAt: g } : {};
+    if (g) return { grabStartAt: g };
+    const d = normalizeDateToken(t, now);
+    if (d) return { grabStartAt: new Date(`${d}T00:00:00+08:00`).toISOString() };
+    return {};
   }
   return {};
 }
@@ -336,6 +370,10 @@ export function nextMissingField(fields: IntakeFields): keyof IntakeFields | nul
   for (const f of order) {
     const v = fields[f];
     if (v === undefined || v === null || v === "") return f;
+    // City-only 北京/上海 etc. must be disambiguated to exact station before confirm
+    if ((f === "from" || f === "to") && (fields.channel === "train" || fields.channel === "flight")) {
+      if (isAmbiguousCityPlace(String(v))) return f;
+    }
   }
   return null;
 }
@@ -488,6 +526,18 @@ export function processTurn(
     /* still ask */
   }
 
+  // If city-only places were captured, clear them so confirm cannot proceed on ambiguous stations
+  if ((fields.channel === "train" || fields.channel === "flight")) {
+    if (isAmbiguousCityPlace(fields.from)) {
+      fields.fromCity = fields.fromCity ?? String(fields.from);
+      delete fields.from;
+    }
+    if (isAmbiguousCityPlace(fields.to)) {
+      fields.toCity = fields.toCity ?? String(fields.to);
+      delete fields.to;
+    }
+  }
+
   const missing = nextMissingField(fields);
   const history = [
     ...session.history,
@@ -510,7 +560,16 @@ export function processTurn(
     };
   }
 
-  const reply = questionFor(missing);
+  let reply = questionFor(missing);
+  if (missing === "from" && fields.fromCity) {
+    reply = `您提到出发地是「${fields.fromCity}」，该城市有多个车站。请回复确切出发站（例如「${fields.fromCity}南」「${fields.fromCity}西」）。`;
+  } else if (missing === "to" && fields.toCity) {
+    reply = `您提到到达地是「${fields.toCity}」，该城市有多个车站。请回复确切到达站（例如「${fields.toCity}虹桥」「${fields.toCity}南」）。`;
+  } else if (missing === "date" && /下?周[日天一二三四五六]|周[日天一二三四五六]/.test(userMessage)) {
+    reply = "您提到了星期几，请给出确切日期（格式 YYYY-MM-DD），以便准确盯票。";
+  } else if (missing === "timeWindow" && /晚上|上午|下午|中午/.test(userMessage) && !/\d{1,2}:\d{2}/.test(userMessage)) {
+    reply = "请给出更确切的时间段（例如「18:00-21:00」或「不限」）。";
+  }
   history.push({ role: "assistant", text: reply });
   return {
     session: { fields, history },

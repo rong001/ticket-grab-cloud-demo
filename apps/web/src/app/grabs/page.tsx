@@ -9,6 +9,8 @@ import { formatFields } from "@/lib/format";
 type GrabItem = {
   id: string;
   status: string;
+  statusReason?: string | null;
+  statusChangedAt?: string | null;
   intervalMinutes: number;
   startsAt?: string | null;
   endsAt?: string | null;
@@ -24,6 +26,8 @@ type GrabItem = {
     createdAt: string;
   };
 };
+
+const LIVE_STATUSES = new Set(["queued", "querying", "has_tickets", "notified", "pending", "active"]);
 
 const CHANNEL_LABEL: Record<string, string> = {
   train: "火车 · 定时抢票",
@@ -147,7 +151,7 @@ export default function GrabsPage() {
 
       {items.map((j) => {
         const fields = formatFields(j.request.fields);
-        const live = j.status === "active" || j.status === "pending";
+        const live = LIVE_STATUSES.has(j.status);
         return (
           <div className={`card grab-list-card channel-${j.request.channel}`} key={j.id}>
             <div className="item-row">
@@ -168,8 +172,10 @@ export default function GrabsPage() {
                 </div>
                 <p className="meta" style={{ margin: "0.5rem 0 0" }}>
                   间隔 {j.intervalMinutes} 分钟
+                  {j.startsAt ? ` · 开始 ${new Date(j.startsAt).toLocaleString()}` : ""}
                   {j.nextRunAt ? ` · 下次 ${countdown(j.nextRunAt)}（${new Date(j.nextRunAt).toLocaleString()}）` : ""}
                   {j.endsAt ? ` · 至 ${new Date(j.endsAt).toLocaleString()}` : ""}
+                  {j.statusReason ? ` · ${j.statusReason}` : ""}
                 </p>
               </div>
               <div className="btn-row" style={{ flexDirection: "column", gap: "0.35rem" }}>
