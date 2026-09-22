@@ -1,188 +1,31 @@
-/** Curated major PRC train stations for intake validation (sync, no network). */
-export const KNOWN_TRAIN_STATIONS: ReadonlySet<string> = new Set([
-  "鞍山",
-  "宝鸡南",
-  "保定东",
-  "北海",
-  "北京",
-  "北京北",
-  "北京朝阳",
-  "北京丰台",
-  "北京南",
-  "北京西",
-  "常州",
-  "常州北",
-  "潮汕",
-  "成都",
-  "成都东",
-  "成都南",
-  "重庆",
-  "重庆北",
-  "重庆西",
-  "大理",
-  "大连",
-  "大连北",
-  "大同南",
-  "丹东",
-  "德阳",
-  "东莞",
-  "东莞南",
-  "佛山西",
-  "福田",
-  "福州",
-  "福州南",
-  "赣州西",
-  "广州",
-  "广州北",
-  "广州东",
-  "广州南",
-  "贵阳北",
-  "贵阳东",
-  "桂林北",
-  "哈尔滨",
-  "哈尔滨西",
-  "哈密",
-  "海口",
-  "海口东",
-  "邯郸东",
-  "汉口",
-  "杭州",
-  "杭州东",
-  "杭州西",
-  "合肥",
-  "合肥南",
-  "衡阳东",
-  "呼和浩特东",
-  "怀化南",
-  "淮安东",
-  "黄山北",
-  "惠州北",
-  "惠州南",
-  "吉林",
-  "济南",
-  "济南东",
-  "济南西",
-  "嘉兴南",
-  "嘉峪关南",
-  "揭阳",
-  "金华",
-  "锦州南",
-  "荆州",
-  "九江",
-  "昆明",
-  "昆明南",
-  "拉萨",
-  "兰州",
-  "兰州西",
-  "乐山",
-  "丽江",
-  "连云港",
-  "临沂北",
-  "柳州",
-  "泸州",
-  "洛阳龙门",
-  "茂名",
-  "绵阳",
-  "牡丹江",
-  "南昌",
-  "南昌西",
-  "南充北",
-  "南京",
-  "南京南",
-  "南宁",
-  "南宁东",
-  "南通",
-  "南阳东",
-  "宁波",
-  "宁德",
-  "莆田",
-  "齐齐哈尔南",
-  "秦皇岛",
-  "青岛",
-  "青岛北",
-  "清远",
-  "泉州",
-  "日照西",
-  "三亚",
-  "沙坪坝",
-  "厦门",
-  "厦门北",
-  "汕头",
-  "汕尾",
-  "上海",
-  "上海虹桥",
-  "上海南",
-  "上海松江",
-  "韶关",
-  "邵阳",
-  "绍兴北",
-  "深圳",
-  "深圳北",
-  "深圳东",
-  "深圳西",
-  "沈阳",
-  "沈阳北",
-  "沈阳南",
-  "石家庄",
-  "石家庄东",
-  "苏州",
-  "苏州北",
-  "台州",
-  "太原南",
-  "唐山",
-  "天津",
-  "天津南",
-  "天津西",
-  "天水南",
-  "吐鲁番北",
-  "万州北",
-  "潍坊",
-  "温州南",
-  "乌鲁木齐",
-  "乌鲁木齐南",
-  "无锡",
-  "无锡东",
-  "芜湖",
-  "武昌",
-  "武汉",
-  "武夷山北",
-  "西安",
-  "西安北",
-  "西昌",
-  "西宁",
-  "咸阳北",
-  "香港西九龙",
-  "襄阳东",
-  "信阳东",
-  "雄安",
-  "徐州东",
-  "烟台",
-  "延吉西",
-  "盐城",
-  "阳江",
-  "宜宾西",
-  "宜昌东",
-  "银川",
-  "岳阳东",
-  "湛江西",
-  "张家口",
-  "张掖西",
-  "长春",
-  "长春西",
-  "长沙",
-  "长沙南",
-  "肇庆东",
-  "镇江南",
-  "郑州",
-  "郑州东",
-  "中山",
-  "中卫南",
-  "株洲西",
-  "珠海",
-  "驻马店西",
-  "淄博",
-  "遵义",
-]);
+/**
+ * Full 12306 station-name allowlist for conversational intake.
+ * Data: ./data/stations.json (fetched 2026-09-22 from kyfw.12306.cn station_name.js).
+ * See ./data/SOURCE.md.
+ */
+import stationNames from "./data/stations.json" with { type: "json" };
+
+const NAMES = stationNames as string[];
+
+/** Full set of known PRC passenger-station Chinese names (~3388). */
+export const KNOWN_TRAIN_STATIONS: ReadonlySet<string> = new Set(NAMES);
+
+/** Prefix → candidates (for unique / ambiguous fuzzy match). Built once. */
+const BY_PREFIX = new Map<string, string[]>();
+for (const name of NAMES) {
+  // Index every prefix length 2..min(6, name.length) for clarify lookups
+  const max = Math.min(6, name.length);
+  for (let i = 2; i <= max; i++) {
+    const p = name.slice(0, i);
+    const arr = BY_PREFIX.get(p);
+    if (arr) arr.push(name);
+    else BY_PREFIX.set(p, [name]);
+  }
+}
+
+export function normalizeStationInput(name: string): string {
+  return name.trim().replace(/站$/u, "");
+}
 
 export function isKnownTrainStationName(name: string): boolean {
   const raw = name.trim();
@@ -190,4 +33,49 @@ export function isKnownTrainStationName(name: string): boolean {
   if (KNOWN_TRAIN_STATIONS.has(raw)) return true;
   if (raw.endsWith("站") && KNOWN_TRAIN_STATIONS.has(raw.slice(0, -1))) return true;
   return false;
+}
+
+export type StationResolve =
+  | { kind: "exact"; name: string }
+  | { kind: "unique"; name: string }
+  | { kind: "ambiguous"; query: string; candidates: string[] }
+  | { kind: "unknown"; query: string };
+
+/**
+ * Resolve a user place token against the 12306 index.
+ * - Exact / trailing「站」→ exact
+ * - Unique prefix / unique contains → unique (auto-accept)
+ * - Multiple real matches → ambiguous (ask clarify; do not confirm)
+ * - Else → unknown (reject)
+ */
+export function resolveTrainStation(raw: string): StationResolve {
+  const q = normalizeStationInput(raw);
+  if (!q || q.length < 2 || /\d|[./]|到|去|至|→/.test(q)) {
+    return { kind: "unknown", query: raw.trim() };
+  }
+  if (KNOWN_TRAIN_STATIONS.has(q)) return { kind: "exact", name: q };
+
+  // Prefix candidates (prefer longer shared prefix)
+  const prefixKey = q.slice(0, Math.min(6, q.length));
+  let cands = (BY_PREFIX.get(prefixKey) ?? []).filter(
+    (n) => n.startsWith(q) || n.includes(q)
+  );
+  // Also: stations that equal query+方位 suffix already covered by startsWith
+  if (cands.length === 0) {
+    // Fallback scan for short queries (rare) — limit to includes
+    cands = NAMES.filter((n) => n.includes(q)).slice(0, 20);
+  } else {
+    // Deduplicate and prefer startsWith over contains
+    const starts = cands.filter((n) => n.startsWith(q));
+    cands = starts.length ? starts : cands;
+    cands = [...new Set(cands)].slice(0, 12);
+  }
+
+  if (cands.length === 1) return { kind: "unique", name: cands[0]! };
+  if (cands.length > 1) return { kind: "ambiguous", query: q, candidates: cands };
+  return { kind: "unknown", query: q };
+}
+
+export function stationIndexSize(): number {
+  return NAMES.length;
 }

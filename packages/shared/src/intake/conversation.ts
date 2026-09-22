@@ -4,7 +4,13 @@
  * passenger count, grab-start time — one missing field at a time.
  */
 
-import { isKnownTrainStationName } from "./knownStations.js";
+import { isKnownTrainStationName, resolveTrainStation } from "./knownStations.js";
+import {
+  resolveAirport,
+  formatAirportChoices,
+  isConcreteAirportLabel,
+  type AirportInfo,
+} from "./knownAirports.js";
 
 export type IntakeChannel = "train" | "show" | "flight";
 
@@ -65,8 +71,8 @@ const FIELD_ORDER_FLIGHT: (keyof IntakeFields)[] = [
 
 const QUESTIONS: Record<string, string> = {
   channel: "请问您要找哪类票？回复「火车」「演出」或「机票」。",
-  from: "请告诉我确切出发站（不要只写城市）。例如「北京南」「北京西」「北京站」。",
-  to: "请告诉我确切到达站（不要只写城市）。例如「上海虹桥」「上海南」「上海站」。",
+  from: "请告诉我确切出发站/机场（不要只写多机场城市）。例如「北京南」「深圳宝安」「SZX」。",
+  to: "请告诉我确切到达站/机场（不要只写多机场城市）。例如「上海虹桥」「上海浦东」「PVG」。",
   eventName: "请告诉我演出/活动名称（可附带城市）。",
   venue: "演出场馆是哪里？（没有可回复「未知」）。",
   date: "出行/观演日期是哪天？（格式 YYYY-MM-DD，或「明天」「下周五」）。",
@@ -75,7 +81,7 @@ const QUESTIONS: Record<string, string> = {
   tier: "偏好票档？（例如「680」「内场」，没有可回复「不限」）。",
   cabin: "舱位偏好？（经济舱/商务舱等，没有可回复「不限」）。",
   passengers: "几位乘客/观演人？（数字 1-9）。",
-  grabStartAt: "何时开始盯票/抢票？（例如「现在」「今晚20:00」「2026-10-01 09:00」）。",
+  grabStartAt: "何时开始盯票/开抢/开售监控？（例如「现在」「今晚20:00」「2026-10-01 09:00」）。",
 };
 
 function normalizeDateToken(raw: string, now = new Date()): string | undefined {
@@ -360,30 +366,43 @@ export function isValidStationToken(place?: string): boolean {
   return isKnownTrainStationName(p);
 }
 
-function acceptPlaceCandidate(raw: string): string | undefined {
+function acceptPlaceCandidate(raw: string, channel?: IntakeChannel): string | undefined {
+  const trimmed = raw.trim();
+  if (channel === "flight" && /^[A-Za-z]{3}$/.test(trimmed)) {
+    const r = resolveAirport(trimmed);
+    if (r.kind === "exact") return r.label;
+    return undefined;
+  }
   const place = cleanPlaceToken(raw);
   if (!place || /\d/.test(place) || /到|去|至|→/.test(place) || /[:：点./]/.test(place)) {
     return undefined;
   }
-  // Only known stations/cities may populate from/to (cities later disambiguated).
-  if (!isKnownTrainStationName(place)) return undefined;
-  return place;
+  if (channel === "flight") {
+    const r = resolveAirport(place);
+    if (r.kind === "exact") return r.label;
+    return undefined; // ambiguous/unknown handled by processTurn clarify
+  }
+  // Train: exact or unique fuzzy against full 12306 index
+  const r = resolveTrainStation(place);
+  if (r.kind === "exact" || r.kind === "unique") return r.name;
+  return undefined;
 }
 
-function extractFromTo(text: string): { from?: string; to?: string } {
+
+function extractFromTo(text: string, channel?: IntakeChannel): { from?: string; to?: string } {
   // Prefer "从A到B"; never treat date hyphens as route separators.
   const cleaned = stripTemporalTokens(text);
   const m =
     cleaned.match(/从\s*([^\s到去至→,，。的]{2,20})\s*(?:到|去|至|→|->)\s*([^\s,，。的]{2,20})/) ||
     cleaned.match(
-      /([\u4e00-\u9fff]{2,12})\s*(?:到|去|至|→|->)\s*([\u4e00-\u9fff]{2,12})/
+      /([\u4e00-\u9fffA-Za-z]{2,12})\s*(?:到|去|至|→|->)\s*([\u4e00-\u9fffA-Za-z]{2,12})/
     ) ||
     // Hyphen only when BOTH sides are pure Chinese (北京-上海), never 2026-09
     cleaned.match(/([\u4e00-\u9fff]{2,12})\s*[-—]\s*([\u4e00-\u9fff]{2,12})/);
   if (!m) return {};
   const result: { from?: string; to?: string } = {};
-  const from = acceptPlaceCandidate(m[1]!);
-  const to = acceptPlaceCandidate(m[2]!);
+  const from = acceptPlaceCandidate(m[1]!, channel);
+  const to = acceptPlaceCandidate(m[2]!, channel);
   if (from) result.from = from;
   if (to) result.to = to;
   return result;
@@ -488,15 +507,43 @@ export function extractIntakePatch(text: string, current: IntakeFields, now = ne
     if (ev.city && !current.fromCity) patch.fromCity = ev.city;
     if (/未知|没有|无|不详|skip/i.test(text.trim()) && !current.venue) patch.venue = "未知";
   } else {
-    const ft = extractFromTo(text);
+    const ft = extractFromTo(text, ch);
     if (ft.from && !current.from) patch.from = ft.from;
     if (ft.to && !current.to) patch.to = ft.to;
-    // single-token answers when asking from/to
-    if (!ft.from && !ft.to && text.trim().length >= 2 && text.trim().length <= 20) {
-      if (!current.from && (ch === "train" || ch === "flight")) {
-        // only fill from if to also missing and message looks like a place
-        if (!/^\d/.test(text) && !detectChannel(text)) {
-          /* defer — handled by nextMissing prompting */
+    // When route tokens are cities / unresolved, still capture for disambiguation
+    if ((ch === "train" || ch === "flight") && (!ft.from || !ft.to)) {
+      const cleaned = stripTemporalTokens(text);
+      const m =
+        cleaned.match(/从\s*([^\s到去至→,，。的]{2,20})\s*(?:到|去|至|→|->)\s*([^\s,，。的]{2,20})/) ||
+        cleaned.match(/([\u4e00-\u9fffA-Za-z]{2,12})\s*(?:到|去|至|→|->)\s*([\u4e00-\u9fffA-Za-z]{2,12})/);
+      if (m) {
+        const a = cleanPlaceToken(m[1]!);
+        const b = cleanPlaceToken(m[2]!);
+        if (!ft.from && a && !current.from && !patch.from) {
+          if (ch === "flight") {
+            const r = resolveAirport(a);
+            if (r.kind === "exact") patch.from = r.label;
+            else if (r.kind === "ambiguous") patch.fromCity = patch.fromCity ?? r.city;
+            else if (!/\d/.test(a)) patch.fromCity = patch.fromCity ?? a;
+          } else if (isAmbiguousCityPlace(a) || resolveTrainStation(a).kind === "ambiguous") {
+            patch.fromCity = patch.fromCity ?? a;
+          } else if (!current.from) {
+            const r = resolveTrainStation(a);
+            if (r.kind === "exact" || r.kind === "unique") patch.from = r.name;
+          }
+        }
+        if (!ft.to && b && !current.to && !patch.to) {
+          if (ch === "flight") {
+            const r = resolveAirport(b);
+            if (r.kind === "exact") patch.to = r.label;
+            else if (r.kind === "ambiguous") patch.toCity = patch.toCity ?? r.city;
+            else if (!/\d/.test(b)) patch.toCity = patch.toCity ?? b;
+          } else if (isAmbiguousCityPlace(b) || resolveTrainStation(b).kind === "ambiguous") {
+            patch.toCity = patch.toCity ?? b;
+          } else if (!current.to) {
+            const r = resolveTrainStation(b);
+            if (r.kind === "exact" || r.kind === "unique") patch.to = r.name;
+          }
         }
       }
     }
@@ -542,7 +589,8 @@ export function extractIntakePatch(text: string, current: IntakeFields, now = ne
 export function applyShortAnswer(
   field: keyof IntakeFields,
   text: string,
-  now = new Date()
+  now = new Date(),
+  channel?: IntakeChannel
 ): Partial<IntakeFields> {
   const t = text.trim();
   if (field === "channel") {
@@ -552,11 +600,11 @@ export function applyShortAnswer(
   if (field === "from" || field === "to" || field === "venue" || field === "eventName") {
     if (/未知|没有|无|不详/.test(t) && field === "venue") return { venue: "未知" };
     if ((field === "from" || field === "to") && t.length >= 1 && t.length <= 40) {
-      // Train: allowlist only. Flight/other: reject digit/date garbage but allow free text.
       if (/\d{4}|[./]/.test(t) || /到|去|至/.test(t)) return {};
-      const place = acceptPlaceCandidate(t);
+      const ch = channel ?? "train";
+      const place = acceptPlaceCandidate(t, ch);
       if (place) return { [field]: place };
-      // Non-allowlist short answers still accepted for disambiguation retries only if no digits
+      // Keep bare city / unresolved token so processTurn can clarify (airport/station ambiguous)
       if (!/\d/.test(t) && /^[\u4e00-\u9fffA-Za-z]{2,20}$/.test(t.trim())) {
         return { [field]: t.trim() };
       }
@@ -618,9 +666,10 @@ export function nextMissingField(fields: IntakeFields): keyof IntakeFields | nul
     // City-only 北京/上海 etc. must be disambiguated to exact station before confirm
     if ((f === "from" || f === "to") && (fields.channel === "train" || fields.channel === "flight")) {
       if (fields.channel === "train" && !isKnownTrainStationName(String(v))) return f;
-      if (isAmbiguousCityPlace(String(v))) return f;
-      // Reject digit/date garbage on any channel
-      if (/\d/.test(String(v)) || /[./]/.test(String(v)) || /到|去|至/.test(String(v))) return f;
+      if (fields.channel === "flight" && !isConcreteAirportLabel(String(v))) return f;
+      if (fields.channel === "train" && isAmbiguousCityPlace(String(v))) return f;
+      // Reject digit/date garbage (allow IATA letters; reject digit dates)
+      if (/\d{4}|[./]|到|去|至/.test(String(v))) return f;
     }
   }
   return null;
@@ -670,8 +719,8 @@ export function buildConfirmationCard(fields: IntakeFields): ConfirmationCard | 
     fields.channel === "train"
       ? "将创建「监控盯票」任务：定时查询 12306 公开余票并通知。不含官方授权的无人值守占座/购票。"
       : fields.channel === "show"
-        ? "将创建「开售/有票监控」：定时检查公开场次信息并通知；下单需跳转大麦等官方完成。不含未授权自动抢购。"
-        : "将创建「航班监控」：按配置数据源查询并通知；购票跳转航司/OTA 官方。不含代收票款。";
+        ? "将创建「开售/有票监控」：定时检查公开场次信息并通知；有票后请跳转大麦/猫眼等官方平台完成购买。本系统不做自动抢购/代下单。"
+        : "将创建「航班监控」：按配置数据源查询并通知；购票请跳转航司或 OTA 官方完成。本系统不做自动出票/代收票款。";
 
   return { channel: fields.channel, channelLabel, lines, capabilityNote, fields: { ...fields } };
 }
@@ -760,7 +809,7 @@ export function processTurn(
   let patch = extractIntakePatch(userMessage, session.fields, now);
   // Short answers fill only fields extract did not already set (avoid clobbering "A到B")
   if (asking) {
-    const short = applyShortAnswer(asking, userMessage, now);
+    const short = applyShortAnswer(asking, userMessage, now, session.fields.channel ?? patch.channel);
     for (const [k, v] of Object.entries(short)) {
       if (patch[k as keyof IntakeFields] === undefined) {
         (patch as Record<string, unknown>)[k] = v;
@@ -781,23 +830,80 @@ export function processTurn(
     /* still ask */
   }
 
-  // Drop invalid / garbage station tokens; never confirm with date fragments or fakes
+  // Drop invalid / garbage station/airport tokens; never confirm with date fragments or fakes
+  // Use a box so nested assignments are visible to later reads (TS CFA ignores let writes in closures).
+  const clarifyBox: {
+    airport: { city: string; candidates: AirportInfo[] } | null;
+    station: { query: string; candidates: string[] } | null;
+  } = { airport: null, station: null };
   if (fields.channel === "train" || fields.channel === "flight") {
-    const dropBad = (v?: string) =>
-      !v || /\d/.test(v) || /[./]/.test(v) || /到|去|至/.test(v) ||
-      (fields.channel === "train" && !isKnownTrainStationName(v));
-    if (dropBad(fields.from)) delete fields.from;
-    if (dropBad(fields.to)) delete fields.to;
-    // If city-only places were captured, clear them so confirm cannot proceed on ambiguous stations
-    if (isAmbiguousCityPlace(fields.from)) {
-      fields.fromCity = fields.fromCity ?? String(fields.from);
-      delete fields.from;
-    }
-    if (isAmbiguousCityPlace(fields.to)) {
-      fields.toCity = fields.toCity ?? String(fields.to);
-      delete fields.to;
+    if (fields.channel === "train") {
+      const normalizeSide = (side: "from" | "to") => {
+        const v = fields[side];
+        if (!v) return;
+        if (/\d{4}|[./]|到|去|至/.test(v)) {
+          delete fields[side];
+          return;
+        }
+        const r = resolveTrainStation(v);
+        if (r.kind === "exact" || r.kind === "unique") {
+          fields[side] = r.name;
+          return;
+        }
+        if (r.kind === "ambiguous") {
+          clarifyBox.station = { query: r.query, candidates: r.candidates };
+          if (side === "from") fields.fromCity = fields.fromCity ?? r.query;
+          else fields.toCity = fields.toCity ?? r.query;
+          delete fields[side];
+          return;
+        }
+        // unknown — if multi-station city name, disambiguate; else drop
+        if (isAmbiguousCityPlace(v)) {
+          if (side === "from") fields.fromCity = fields.fromCity ?? v;
+          else fields.toCity = fields.toCity ?? v;
+        }
+        delete fields[side];
+      };
+      normalizeSide("from");
+      normalizeSide("to");
+      // Known station that is also a multi-station city (北京/上海…) → still force exact
+      if (fields.from && isAmbiguousCityPlace(fields.from)) {
+        fields.fromCity = fields.fromCity ?? fields.from;
+        delete fields.from;
+      }
+      if (fields.to && isAmbiguousCityPlace(fields.to)) {
+        fields.toCity = fields.toCity ?? fields.to;
+        delete fields.to;
+      }
+    } else {
+      // flight
+      const normalizeAir = (side: "from" | "to") => {
+        const v = fields[side];
+        if (!v) return;
+        if (/\d{4}|[./]|到|去|至/.test(v) && !isConcreteAirportLabel(v)) {
+          delete fields[side];
+          return;
+        }
+        const r = resolveAirport(v);
+        if (r.kind === "exact") {
+          fields[side] = r.label;
+          return;
+        }
+        if (r.kind === "ambiguous") {
+          clarifyBox.airport = { city: r.city, candidates: r.candidates };
+          if (side === "from") fields.fromCity = fields.fromCity ?? r.city;
+          else fields.toCity = fields.toCity ?? r.city;
+          delete fields[side];
+          return;
+        }
+        delete fields[side];
+      };
+      normalizeAir("from");
+      normalizeAir("to");
     }
   }
+  const airportClarify = clarifyBox.airport;
+  const stationClarify = clarifyBox.station;
 
   const missing = nextMissingField(fields);
   const history = [
@@ -822,14 +928,49 @@ export function processTurn(
   }
 
   let reply = questionFor(missing);
-  if (missing === "from" && fields.fromCity) {
-    reply = `您提到出发地是「${fields.fromCity}」，该城市有多个车站。请回复确切出发站（例如「${fields.fromCity}南」「${fields.fromCity}西」）。`;
+  if ((missing === "from" || missing === "to") && fields.channel === "flight") {
+    const city = missing === "from" ? fields.fromCity : fields.toCity;
+    const clarify = airportClarify ?? (city ? (() => {
+      const r = resolveAirport(city);
+      return r.kind === "ambiguous" ? { city: r.city, candidates: r.candidates } : null;
+    })() : null);
+    if (clarify) {
+      reply =
+        `您提到${missing === "from" ? "出发" : "到达"}城市「${clarify.city}」有多个机场：` +
+        `${formatAirportChoices(clarify.candidates)}。请回复机场名或 IATA 代码。`;
+    } else if (city) {
+      reply = `请给出确切${missing === "from" ? "出发" : "到达"}机场（例如「深圳宝安」「SZX」），不要只写城市「${city}」。`;
+    } else {
+      reply = `请告诉我确切${missing === "from" ? "出发" : "到达"}机场（中文名或 IATA，例如「上海浦东」「PVG」）。`;
+    }
+  } else if (missing === "from" && fields.fromCity) {
+    const sc = stationClarify;
+    if (sc && sc.candidates.length) {
+      reply =
+        `「${sc.query}」对应多个车站：` +
+        sc.candidates.slice(0, 8).map((c) => `「${c}」`).join(" / ") +
+        `。请回复确切出发站。`;
+    } else {
+      reply = `您提到出发地是「${fields.fromCity}」，该城市有多个车站。请回复确切出发站（例如「${fields.fromCity}南」「${fields.fromCity}西」）。`;
+    }
   } else if (missing === "to" && fields.toCity) {
-    reply = `您提到到达地是「${fields.toCity}」，该城市有多个车站。请回复确切到达站（例如「${fields.toCity}虹桥」「${fields.toCity}南」）。`;
+    const sc = stationClarify;
+    if (sc && sc.candidates.length) {
+      reply =
+        `「${sc.query}」对应多个车站：` +
+        sc.candidates.slice(0, 8).map((c) => `「${c}」`).join(" / ") +
+        `。请回复确切到达站。`;
+    } else {
+      reply = `您提到到达地是「${fields.toCity}」，该城市有多个车站。请回复确切到达站（例如「${fields.toCity}虹桥」「${fields.toCity}南」）。`;
+    }
   } else if (missing === "date" && /下?周[日天一二三四五六]|周[日天一二三四五六]/.test(userMessage)) {
     reply = "您提到了星期几，请给出确切日期（格式 YYYY-MM-DD），以便准确盯票。";
   } else if (missing === "timeWindow" && /晚上|上午|下午|中午/.test(userMessage) && !/\d{1,2}:\d{2}/.test(userMessage)) {
     reply = "请给出更确切的时间段（例如「18:00-21:00」或「不限」）。";
+  } else if (missing === "grabStartAt" && fields.channel === "show") {
+    reply = "开售/开抢或盯票开始时间？（例如「现在」「今晚20:00」「2026-10-01 09:00」）。有票后请前往大麦/猫眼官方购买，本系统仅监控通知。";
+  } else if (missing === "grabStartAt" && fields.channel === "flight") {
+    reply = "何时开始监控航班？（例如「现在」「今晚20:00」）。有合适航班后请跳转航司/OTA 官方购票，本系统仅监控通知。";
   }
   history.push({ role: "assistant", text: reply });
   return {

@@ -305,3 +305,107 @@ describe("P1b grabStartAt vs travel timeWindow", () => {
     assert.equal(r.missing, "grabStartAt");
   });
 });
+
+describe("full station index + small HSR stops", () => {
+  const fixedNow = new Date("2026-09-22T04:00:00.000Z");
+
+  for (const station of ["嘉兴南", "虎门", "韶关东", "龙岩"] as const) {
+    it(`accepts small station ${station} through to confirm`, () => {
+      let r = processTurn(createEmptySession(), "火车", fixedNow);
+      r = processTurn(r.session, `${station}到深圳北`, fixedNow);
+      assert.equal(r.session.fields.from, station);
+      assert.equal(r.session.fields.to, "深圳北");
+      r = processTurn(r.session, "2026-12-01", fixedNow);
+      r = processTurn(r.session, "不限", fixedNow);
+      r = processTurn(r.session, "二等座", fixedNow);
+      r = processTurn(r.session, "1人", fixedNow);
+      r = processTurn(r.session, "2026-11-01 09:00", fixedNow);
+      assert.equal(r.readyForConfirm, true);
+      assert.ok(r.confirmation);
+      assert.equal(r.session.fields.from, station);
+    });
+  }
+
+  it("rejects nonsense stations — no confirm", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "假车站到另一个假站 2026-12-01 二等座 1人 现在",
+      fixedNow
+    );
+    assert.equal(r.readyForConfirm, false);
+    assert.equal(r.confirmation, undefined);
+    assert.ok(!r.session.fields.from || !isValidStationToken(r.session.fields.from));
+  });
+});
+
+describe("show multi-turn full path", () => {
+  const fixedNow = new Date("2026-09-22T04:00:00.000Z");
+  it("asks venue→date→tier→pax→grabStart; confirm only when complete", () => {
+    let r = processTurn(createEmptySession(), "演出", fixedNow);
+    assert.equal(r.session.fields.channel, "show");
+    r = processTurn(r.session, "周杰伦嘉年华演唱会", fixedNow);
+    assert.ok(r.session.fields.eventName);
+    assert.equal(r.readyForConfirm, false);
+    r = processTurn(r.session, "梅赛德斯-奔驰文化中心", fixedNow);
+    assert.equal(r.session.fields.venue, "梅赛德斯-奔驰文化中心");
+    r = processTurn(r.session, "2026-12-31", fixedNow);
+    assert.equal(r.missing, "tier");
+    r = processTurn(r.session, "内场680", fixedNow);
+    assert.ok(r.session.fields.tier);
+    r = processTurn(r.session, "2人", fixedNow);
+    assert.equal(r.missing, "grabStartAt");
+    assert.ok(/开售|开抢|盯票|大麦|猫眼/.test(r.reply), r.reply);
+    r = processTurn(r.session, "2026-11-15 10:00", fixedNow);
+    assert.equal(r.readyForConfirm, true);
+    assert.ok(r.confirmation);
+    assert.ok(/大麦|猫眼|官方/.test(r.confirmation!.capabilityNote));
+    assert.ok(!/自动抢购|自动购票|无人值守/.test(r.confirmation!.capabilityNote) || /不含|不做/.test(r.confirmation!.capabilityNote));
+  });
+
+  it("missing venue → no confirm", () => {
+    let r = processTurn(createEmptySession(), "周杰伦演唱会", fixedNow);
+    assert.equal(r.readyForConfirm, false);
+    assert.ok(r.missing === "venue" || r.missing === "date" || r.missing === "eventName");
+  });
+});
+
+describe("flight multi-turn + airport disambiguation", () => {
+  const fixedNow = new Date("2026-09-22T04:00:00.000Z");
+
+  it("city 北京 → ask PEK/PKX; no confirm until resolved", () => {
+    let r = processTurn(createEmptySession(), "机票", fixedNow);
+    r = processTurn(r.session, "北京到上海", fixedNow);
+    assert.equal(r.readyForConfirm, false);
+    assert.ok(
+      r.missing === "from" || r.missing === "to",
+      `expected from/to missing, got ${r.missing}`
+    );
+    assert.ok(/机场|PEK|PKX|首都|大兴/.test(r.reply), r.reply);
+    r = processTurn(r.session, "PKX", fixedNow);
+    assert.ok(r.session.fields.from?.includes("PKX") || r.session.fields.from?.includes("大兴"));
+  });
+
+  it("SZX to PVG concrete path reaches confirm", () => {
+    let r = processTurn(createEmptySession(), "机票", fixedNow);
+    r = processTurn(r.session, "SZX到PVG", fixedNow);
+    assert.ok(r.session.fields.from?.includes("SZX"));
+    assert.ok(r.session.fields.to?.includes("PVG"));
+    r = processTurn(r.session, "2026-12-01", fixedNow);
+    r = processTurn(r.session, "不限", fixedNow);
+    r = processTurn(r.session, "经济舱", fixedNow);
+    r = processTurn(r.session, "1人", fixedNow);
+    r = processTurn(r.session, "2026-11-01 09:00", fixedNow);
+    assert.equal(r.readyForConfirm, true);
+    assert.ok(r.confirmation);
+    assert.ok(/航司|OTA|官方/.test(r.confirmation!.capabilityNote));
+  });
+
+  it("past grabStartAt rejected on flight", () => {
+    let r = processTurn(createEmptySession(), "机票 SZX到PVG 2026-12-01 不限 经济舱 1人", fixedNow);
+    assert.equal(r.missing, "grabStartAt");
+    r = processTurn(r.session, "今天8点", fixedNow);
+    assert.equal(r.session.fields.grabStartAt, undefined);
+    assert.equal(r.readyForConfirm, false);
+    assert.equal(r.missing, "grabStartAt");
+  });
+});
