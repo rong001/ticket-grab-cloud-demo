@@ -48,22 +48,23 @@ curl -sS "$BASE/health" | jq '{trainRealSubmit,bookingStub,providerMode}'
 
 ## Commit SHAs
 
-- Private feature:  (+ follow-ups  for shared restore + useParams build fix)
-- Public demo:  — https://github.com/rong001/ticket-grab-cloud-demo/commit/99ec357bfe75cd65ee03e0f619f3b078ad772cdb
-- Public head:  — https://github.com/rong001/ticket-grab-cloud-demo/commit/4ad2d1235e0e249a78fdf21e91973de07b32edb1
+- Private feature: `7c713764087d40bf7275ef3261e5a2a507c5548a`
+- Private head (shared restore + useParams + docs): `832284ab3579c245abd92dcd7ab87c4a9a0c01ed`
+- Public demo feature: `99ec357bfe75cd65ee03e0f619f3b078ad772cdb` — https://github.com/rong001/ticket-grab-cloud-demo/commit/99ec357bfe75cd65ee03e0f619f3b078ad772cdb
+- Public head: `9d35d4d5f121d8fdac86ba44f8b623c2d005abd2` — https://github.com/rong001/ticket-grab-cloud-demo/commit/9d35d4d5f121d8fdac86ba44f8b623c2d005abd2
 
 ## Live evidence
 
--  → , , , 
-- Host  still 
-- UI HTTP 200: , 
+- `GET /api/health` → `ok=true`, `trainRealSubmit=false`, `bookingStub=false`, `providerMode=live`
+- Host `.env.production` still `TRAIN_REAL_SUBMIT=0`
+- UI HTTP 200: `/`, `/grabs`
 - Synthetic register (emailFp only) → 3 watches train+show+flight
--  → count=3, quota , each row has channel/status/nextRunAt/dataSourceHint/repeatableArmed
-- Pause train →  + ; show remains  + armed
+- `GET /grabs` → count=3, quota `maxActive=10 activeCount=3 remaining=7`, each row has channel/status/nextRunAt/dataSourceHint/repeatableArmed
+- Pause train → `paused` + `repeatableArmed=false`; show remains `notified` + armed
 - Cancel train → cancelled/disarmed; show intact + armed
-- Soft limit covered by local smoke ( 400)
+- Soft limit covered by local smoke (`ACTIVE_WATCH_LIMIT` 400)
 - Commerce :80/:443 untouched
--  live → 
+- `scripts/concurrent-grabs-e2e.mjs` live → `ok=true`
 
 ## Remaining main blocker
 
