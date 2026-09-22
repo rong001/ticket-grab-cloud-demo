@@ -5,6 +5,12 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { api, ApiError, getToken } from "@/lib/api";
 import { useDamaiTheme } from "@/components/DamaiTheme";
+import {
+  gateInfoBanner,
+  isPurchaseGateCode,
+  resolveGateOffFromApiError,
+  resolveGateOffFromOrderDetail,
+} from "@/lib/orderGate";
 
 type EventRow = {
   id: string;
@@ -81,29 +87,7 @@ export default function OrderDetailPage() {
     api<OrderDetail>(`/orders/${id}`)
       .then((d) => {
         setData(d);
-        const gateCode = d.payload?.gate?.code ?? d.errorMessage;
-        if (gateCode === "SHOW_AUTO_BUY_UNAVAILABLE" ||
-          gateCode === "FLIGHT_INVENTORY_UNAVAILABLE" ||
-          gateCode === "FLIGHT_AUTO_BUY_UNAVAILABLE") {
-          setGateOff({
-            code: "SHOW_AUTO_BUY_UNAVAILABLE",
-            nextSteps: d.payload?.nextSteps ?? [],
-            message:
-              d.payload?.notes ??
-              "真实大麦/猫眼下单 API 未接入；未自动购票、未谎报已支付。请用户登录官方完成支付。",
-          });
-        } else if (
-          gateCode === "TRAIN_REAL_SUBMIT_DISABLED" ||
-          d.payload?.gate?.trainRealSubmit === false
-        ) {
-          setGateOff({
-            code: "TRAIN_REAL_SUBMIT_DISABLED",
-            nextSteps: d.payload?.nextSteps ?? [],
-            message:
-              d.payload?.notes ??
-              "12306 协助提交未开启（TRAIN_REAL_SUBMIT=0），未产生真实占座/扣款。",
-          });
-        }
+        setGateOff(resolveGateOffFromOrderDetail(d));
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, [id, router]);
@@ -121,28 +105,16 @@ export default function OrderDetailPage() {
       setGateOff(null);
       load();
     } catch (e) {
-      if (
-        e instanceof ApiError &&
-        (e.code === "TRAIN_REAL_SUBMIT_DISABLED" ||
-          e.code === "SHOW_AUTO_BUY_UNAVAILABLE" ||
-          e.code === "FLIGHT_INVENTORY_UNAVAILABLE" ||
-          e.code === "FLIGHT_AUTO_BUY_UNAVAILABLE" ||
-          e.status === 403)
-      ) {
-        setGateOff({
-          code: e.code ?? "SUBMIT_GATED",
-          nextSteps: e.nextSteps,
-          message: e.message,
-        });
-        setInfo(
-          e.code === "SHOW_AUTO_BUY_UNAVAILABLE"
-            ? "演出自动购票不可用 — 仅草稿/官方手递，未谎报已支付。详见下方下一步。"
-            : e.code === "FLIGHT_INVENTORY_UNAVAILABLE" ||
-                e.code === "FLIGHT_AUTO_BUY_UNAVAILABLE"
-              ? "机票库存/运价未接入 — 仅草稿/官方手递，未谎报已支付。详见下方下一步。"
-              : "协助提交已拒绝（门禁关闭）— 详见下方下一步。订单未标记已支付。"
-        );
-        load();
+      if (e instanceof ApiError) {
+        const gate = resolveGateOffFromApiError(e);
+        if (gate) {
+          setGateOff(gate);
+          setInfo(gateInfoBanner(gate.code));
+          load();
+        } else {
+          // Generic 403/unauthorized → normal permission error, not purchase gate.
+          setError(e.message || (e.status === 403 ? "无权限执行此操作" : "提交失败"));
+        }
       } else {
         setError(e instanceof Error ? e.message : "提交失败");
       }
@@ -212,11 +184,7 @@ export default function OrderDetailPage() {
 
       {error && <p className="error" style={{ marginBottom: "1rem" }}>{error}</p>}
       {info && <p className="info-banner">{info}</p>}
-      {data.errorMessage &&
-        data.errorMessage !== "TRAIN_REAL_SUBMIT_DISABLED" &&
-        data.errorMessage !== "SHOW_AUTO_BUY_UNAVAILABLE" &&
-        data.errorMessage !== "FLIGHT_INVENTORY_UNAVAILABLE" &&
-        data.errorMessage !== "FLIGHT_AUTO_BUY_UNAVAILABLE" && (
+      {data.errorMessage && !isPurchaseGateCode(data.errorMessage) && (
         <p className="error" style={{ marginBottom: "1rem" }}>{data.errorMessage}</p>
       )}
 

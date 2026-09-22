@@ -26,65 +26,15 @@ import {
 } from "../lib/watchLimits.js";
 import { env } from "../env.js";
 import { resolveTravelerIdsForUser, travelerSummariesForIds } from "../lib/travelers.js";
+import {
+  pickShortlistItem,
+  sameTravelerIdSet,
+  watchDraftFingerprint,
+} from "../lib/pickShortlistItem.js";
 
 
 function asJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
-}
-
-/** Pick shortlist item: explicit id, else prefs filter, else first available/limited. */
-function pickShortlistItem(
-  items: ShortlistItem[],
-  preferences: Record<string, unknown> | null | undefined,
-  selectedId?: string
-): ShortlistItem | null {
-  if (!items.length) return null;
-  if (selectedId) {
-    const hit = items.find((i) => i.id === selectedId);
-    return hit ?? null;
-  }
-  let pool = items.filter(
-    (i) => i.availability === "available" || i.availability === "limited"
-  );
-  if (!pool.length) pool = [...items];
-  const prefs = preferences ?? {};
-  const preferredTrains = Array.isArray(prefs.preferredTrains)
-    ? prefs.preferredTrains.map(String)
-    : [];
-  const preferredSeats = Array.isArray(prefs.preferredSeats)
-    ? prefs.preferredSeats.map(String)
-    : [];
-  const preferredTiers = Array.isArray(prefs.preferredTiers)
-    ? prefs.preferredTiers.map(String)
-    : [];
-  if (preferredTrains.length) {
-    const filtered = pool.filter((i) => {
-      const no = String(i.meta?.trainNo ?? i.title.split(" ")[0] ?? "");
-      return preferredTrains.some((t) => no.includes(t) || i.title.includes(t));
-    });
-    if (filtered.length) pool = filtered;
-  }
-  if (preferredSeats.length) {
-    const filtered = pool.filter((i) => {
-      const seat = String(i.meta?.seatClass ?? "");
-      return preferredSeats.some(
-        (s) => seat.includes(s) || i.title.includes(s) || i.subtitle?.includes(s)
-      );
-    });
-    if (filtered.length) pool = filtered;
-  }
-  if (preferredTiers.length) {
-    const filtered = pool.filter((i) => {
-      const tier = String(i.meta?.tier ?? "");
-      return preferredTiers.some((t) => tier.includes(t));
-    });
-    if (filtered.length) pool = filtered;
-  }
-  
-  // Prefer sellable/inventory-looking items; scheduleOnly (OpenSky/Aviationstack) is last resort for draft UX.
-  const nonSchedule = pool.filter((i) => (i.meta as { scheduleOnly?: boolean } | undefined)?.scheduleOnly !== true);
-  if (nonSchedule.length) pool = nonSchedule;
-return pool[0] ?? null;
 }
 
 export async function requestRoutes(app: FastifyInstance) {
@@ -764,31 +714,11 @@ export async function requestRoutes(app: FastifyInstance) {
     }
 
     const preferences = (watch.preferences ?? null) as Record<string, unknown> | null;
-    const item = pickShortlistItem(items, preferences, body.selectedShortlistItemId);
-    if (!item) {
-      return reply.code(400).send({
-        error: body.selectedShortlistItemId
-          ? "指定的短名单项不存在于最新快照"
-          : "无法从短名单中选出匹配项",
-        code: "SHORTLIST_ITEM_NOT_FOUND",
-      });
+    const picked = pickShortlistItem(items, preferences, body.selectedShortlistItemId);
+    if (!picked.ok) {
+      return reply.code(400).send({ error: picked.error, code: picked.code });
     }
-
-    // Idempotent: reuse draft/awaiting_login for same watch + item
-    const candidates = await prisma.order.findMany({
-      where: {
-        userId: user.sub,
-        requestId: watch.requestId,
-        selectedShortlistItemId: item.id,
-        status: { in: ["draft", "awaiting_login"] },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-    });
-    const existing = candidates.find((o) => {
-      const payload = (o.payload ?? {}) as Record<string, unknown>;
-      return payload.watchJobId === watchJobId;
-    });
+    const item = picked.item;
 
     const travelers = await travelerSummariesForIds(user.sub, bind.travelerIds);
     const confirmWhat =
@@ -801,10 +731,93 @@ export async function requestRoutes(app: FastifyInstance) {
     const scheduleOnly =
       (item.meta as { scheduleOnly?: boolean } | undefined)?.scheduleOnly === true;
     const flightInventoryLive = bookingFlags.flightInventoryLive === true;
+
+    const draftPayloadNextSteps =
+      channel === "show"
+        ? [
+            `打开订单页确认场次/票档与${personLabel}`,
+            "在「账号绑定」(/accounts) 关联本人大麦或猫眼会话（待用户登录官方）",
+            "验证码/风控须本人在官方完成；本站不自动购票",
+            "支付仅在官方大麦/猫眼收银台（待用户登录官方）；本站不代扣、不谎报已支付",
+          ]
+        : channel === "flight"
+          ? [
+              `打开订单页确认航班与${personLabel}` +
+                (scheduleOnly ? "（时刻/动态，非可售库存）" : ""),
+              "配置授权运价/库存 API（Amadeus 等；OpenSky/Aviationstack 不可售）",
+              "在「账号绑定」(/accounts) 关联本人航司/OTA 会话（待用户登录官方）",
+              "支付仅在官方航司/OTA 收银台（待用户登录官方）；本站不代扣、不谎报已支付",
+            ]
+          : [
+              `打开订单页确认车次与${personLabel}`,
+              "在「账号绑定」(/accounts) 关联本人 12306 会话",
+              "验证码/短信/人脸须本人完成；TRAIN_REAL_SUBMIT=1 后才可协助提交",
+              "支付仅在官方 12306 收银台；本站不代扣",
+            ];
+
+    const amount =
+      typeof item.price === "number" ? item.price * bind.travelerIds.length : null;
+
+    const fingerprint = watchDraftFingerprint(
+      user.sub,
+      watchJobId,
+      item.id,
+      bind.travelerIds
+    );
+
+    // Atomic idempotency: advisory xact lock + find-or-create for
+    // (user, watchId, selectedShortlistItemId, travelerIds-set).
+    const { order, reused } = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${fingerprint}))`;
+
+      const candidates = await tx.order.findMany({
+        where: {
+          userId: user.sub,
+          requestId: watch.requestId,
+          selectedShortlistItemId: item.id,
+          status: { in: ["draft", "awaiting_login"] },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      });
+      const existing = candidates.find((o) => {
+        const payload = (o.payload ?? {}) as Record<string, unknown>;
+        return (
+          payload.watchJobId === watchJobId &&
+          sameTravelerIdSet(o.travelerIds ?? [], bind.travelerIds)
+        );
+      });
+      if (existing) {
+        return { order: existing, reused: true as const };
+      }
+
+      const created = await tx.order.create({
+        data: {
+          userId: user.sub,
+          requestId: watch.requestId,
+          channel: watch.request.channel,
+          status: "draft",
+          selectedShortlistItemId: item.id,
+          travelerIds: bind.travelerIds,
+          amount,
+          currency: item.currency ?? "CNY",
+          payload: asJson({
+            shortlistItem: item,
+            watchJobId,
+            createdFromWatch: true,
+            draftFingerprint: fingerprint,
+            nextSteps: draftPayloadNextSteps,
+            notes: "由抢票任务手动创建的草稿订单（未提交、未扣款）",
+          }),
+        },
+      });
+      return { order: created, reused: false as const };
+    });
+
     const nextSteps =
       channel === "show"
         ? [
-            `打开订单页 /orders/${existing?.id ?? "{id}"} 确认${confirmWhat}`,
+            `打开订单页 /orders/${order.id} 确认${confirmWhat}`,
             "在「账号绑定」(/accounts) 关联本人大麦或猫眼会话（待用户登录官方）",
             "如出现验证码/风控/短信，请在官方 App 或站内引导步骤手动完成（本站不会自动打码或绕过）",
             ...showAutoBuyUnavailableNextSteps().filter((s) =>
@@ -814,7 +827,7 @@ export async function requestRoutes(app: FastifyInstance) {
           ]
         : channel === "flight"
           ? [
-              `打开订单页 /orders/${existing?.id ?? "{id}"} 确认${confirmWhat}` +
+              `打开订单页 /orders/${order.id} 确认${confirmWhat}` +
                 (scheduleOnly ? "（当前为航班时刻/动态，不可售库存）" : ""),
               "配置已授权的机票运价/库存 API（Amadeus Flight Offers / FLIGHT_PUBLIC_API_URL；OpenSky/Aviationstack 不可售）",
               "在「账号绑定」(/accounts) 关联本人航司/OTA 会话（待用户登录官方）",
@@ -824,7 +837,7 @@ export async function requestRoutes(app: FastifyInstance) {
               "本接口只创建草稿订单，不会自动提交或扣款，不会谎报已支付；提交将返回 FLIGHT_INVENTORY_UNAVAILABLE",
             ]
           : [
-              `打开订单页 /orders/${existing?.id ?? "{id}"} 确认${confirmWhat}`,
+              `打开订单页 /orders/${order.id} 确认${confirmWhat}`,
               "在「账号绑定」(/accounts) 关联本人 12306 会话",
               "如出现验证码/短信/人脸，请在站内引导步骤手动完成（本站不会自动打码或绕过）",
               ...trainRealSubmitDisabledNextSteps().filter((s) =>
@@ -833,102 +846,36 @@ export async function requestRoutes(app: FastifyInstance) {
               "本接口只创建草稿订单，不会自动提交或扣款",
             ];
 
-    if (existing) {
-      nextSteps[0] = `打开订单页 /orders/${existing.id} 确认${confirmWhat}`;
-      return {
-        orderId: existing.id,
-        status: existing.status === "awaiting_login" ? "awaiting_login" : "draft",
-        reused: true,
-        watchJobId,
-        selectedShortlistItemId: item.id,
-        shortlistItem: item,
-        travelerIds: bind.travelerIds,
-        travelers,
-        trainRealSubmit: trainRealSubmitEnabled(),
-        showAutoBuy: false,
-        flightInventoryLive,
-        flightAutoBuy: false,
-        scheduleOnly: channel === "flight" ? scheduleOnly : undefined,
-        channel,
-        nextSteps,
-        orderPath: `/orders/${existing.id}`,
-      };
+    if (!reused) {
+      await prisma.notificationEvent.create({
+        data: {
+          requestId: watch.requestId,
+          orderId: order.id,
+          type: "watch_order_draft",
+          title: `已创建草稿订单 · ${item.title}`,
+          body: "来自抢票任务的手动建单。未提交、未扣款。请打开订单页继续。",
+          payload: {
+            orderId: order.id,
+            watchJobId,
+            itemId: item.id,
+            orderPath: `/orders/${order.id}`,
+          } as unknown as Prisma.InputJsonValue,
+        },
+      });
+
+      await logActivity(
+        user.sub,
+        user.email,
+        "watch_order_draft",
+        `Draft order ${order.id} from watch ${watchJobId}`,
+        { orderId: order.id, watchJobId, requestId: watch.requestId, itemId: item.id }
+      );
     }
 
-    const amount =
-      typeof item.price === "number" ? item.price * bind.travelerIds.length : null;
-
-    const order = await prisma.order.create({
-      data: {
-        userId: user.sub,
-        requestId: watch.requestId,
-        channel: watch.request.channel,
-        status: "draft",
-        selectedShortlistItemId: item.id,
-        travelerIds: bind.travelerIds,
-        amount,
-        currency: item.currency ?? "CNY",
-        payload: asJson({
-          shortlistItem: item,
-          watchJobId,
-          createdFromWatch: true,
-          nextSteps:
-            channel === "show"
-              ? [
-                  `打开订单页确认场次/票档与${personLabel}`,
-                  "在「账号绑定」(/accounts) 关联本人大麦或猫眼会话（待用户登录官方）",
-                  "验证码/风控须本人在官方完成；本站不自动购票",
-                  "支付仅在官方大麦/猫眼收银台（待用户登录官方）；本站不代扣、不谎报已支付",
-                ]
-              : channel === "flight"
-                ? [
-                    `打开订单页确认航班与${personLabel}` +
-                      (scheduleOnly ? "（时刻/动态，非可售库存）" : ""),
-                    "配置授权运价/库存 API（Amadeus 等；OpenSky/Aviationstack 不可售）",
-                    "在「账号绑定」(/accounts) 关联本人航司/OTA 会话（待用户登录官方）",
-                    "支付仅在官方航司/OTA 收银台（待用户登录官方）；本站不代扣、不谎报已支付",
-                  ]
-                : [
-                    `打开订单页确认车次与${personLabel}`,
-                    "在「账号绑定」(/accounts) 关联本人 12306 会话",
-                    "验证码/短信/人脸须本人完成；TRAIN_REAL_SUBMIT=1 后才可协助提交",
-                    "支付仅在官方 12306 收银台；本站不代扣",
-                  ],
-          notes: "由抢票任务手动创建的草稿订单（未提交、未扣款）",
-        }),
-      },
-    });
-
-    nextSteps[0] = `打开订单页 /orders/${order.id} 确认${confirmWhat}`;
-
-    await prisma.notificationEvent.create({
-      data: {
-        requestId: watch.requestId,
-        orderId: order.id,
-        type: "watch_order_draft",
-        title: `已创建草稿订单 · ${item.title}`,
-        body: "来自抢票任务的手动建单。未提交、未扣款。请打开订单页继续。",
-        payload: {
-          orderId: order.id,
-          watchJobId,
-          itemId: item.id,
-          orderPath: `/orders/${order.id}`,
-        } as unknown as Prisma.InputJsonValue,
-      },
-    });
-
-    await logActivity(
-      user.sub,
-      user.email,
-      "watch_order_draft",
-      `Draft order ${order.id} from watch ${watchJobId}`,
-      { orderId: order.id, watchJobId, requestId: watch.requestId, itemId: item.id }
-    );
-
-    return reply.code(201).send({
+    const responseBody = {
       orderId: order.id,
-      status: "draft",
-      reused: false,
+      status: order.status === "awaiting_login" ? "awaiting_login" : "draft",
+      reused,
       watchJobId,
       selectedShortlistItemId: item.id,
       shortlistItem: item,
@@ -942,7 +889,12 @@ export async function requestRoutes(app: FastifyInstance) {
       channel,
       nextSteps,
       orderPath: `/orders/${order.id}`,
-    });
+    };
+
+    if (reused) {
+      return responseBody;
+    }
+    return reply.code(201).send(responseBody);
   });
 
   app.get("/requests/:id/events", {
