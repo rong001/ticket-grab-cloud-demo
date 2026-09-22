@@ -265,3 +265,7 @@ Monitor + official redirect only; never auto-purchase.
 - **P1d**: 通过
 - **P1e**: 通过 (this report)
 - **整体对话入单验收**: 未通过
+
+## Public commit
+- SHA: `b7a62156cd5df0d6b158e2e324db0d95be0bba18`
+- URL: https://github.com/rong001/ticket-grab-cloud-demo/commit/b7a62156cd5df0d6b158e2e324db0d95be0bba18
