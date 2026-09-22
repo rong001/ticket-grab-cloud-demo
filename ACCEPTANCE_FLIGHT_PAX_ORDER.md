@@ -58,12 +58,21 @@ curl -sS "$BASE/health" | jq '{trainRealSubmit,bookingStub,flightInventoryLive,p
 
 ## Commit SHAs
 
-- Private: _(pending)_
-- Public demo: _(pending)_
+- Private:  (docs tip )
+- Public demo:  — https://github.com/rong001/ticket-grab-cloud-demo/commit/76b63b26547316691acaa104eb2d3b540e89ab2d
 
 ## Live evidence
 
-_(filled after deploy)_
+-  → , , , ,  (scheduleConfigured may be true; scheduleLive false under OpenSky 429)
+- Host : , 
+- UI HTTP 200: , ,  (乘机人 copy present)
+- Synthetic register (emailFp ) → 2 travelers (hints  / ; no full ID)
+- Flight request passengers=2 → watch with 2 travelerIds (OpenSky 429 → degraded watch, no tickets_found)
+- scheduleOnly shortlist item (flagged, not sellable) →  → **201** draft, channel=flight, 2 traveler summaries, , , nextSteps include 待接入/Amadeus
+- Second create-order → same orderId, 
+-  → **403** , status remains  (not paid)
+- Commerce :80/:443 untouched (443 still 200)
+
 
 ## Remaining main blocker
 
