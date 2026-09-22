@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import {
   createRequestSchema,
   createWatchOrderSchema,
+  describeDataSources,
   searchTickets,
   watchRequestSchema,
   type Channel,
@@ -16,6 +17,10 @@ import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../lib/auth.js";
 import { logActivity } from "../lib/activity.js";
 import { getWatchQueue, removeWatchRepeatable, hasWatchRepeatable, type WatchJobPayload } from "../lib/queue.js";
+import {
+  ACTIVE_WATCH_STATUSES,
+  MAX_ACTIVE_WATCHES_PER_USER,
+} from "../lib/watchLimits.js";
 import { env } from "../env.js";
 import { resolveTravelerIdsForUser, travelerSummariesForIds } from "../lib/travelers.js";
 
@@ -125,21 +130,13 @@ export async function requestRoutes(app: FastifyInstance) {
   }, async (request) => {
     const user = await authenticate(request);
     const statusFilter = (request.query as { status?: string }).status;
-    /** Default = in-progress lifecycle (queued stays until startsAt; not only active/pending). */
-    const LIVE_STATUSES = [
-      "queued",
-      "querying",
-      "has_tickets",
-      "notified",
-      "pending",
-      "active",
-    ] as const;
+    /** Default = in-progress + paused (concurrent management; paused still listed). */
     const statuses =
       statusFilter === "all"
         ? undefined
         : statusFilter
           ? [statusFilter]
-          : [...LIVE_STATUSES];
+          : [...ACTIVE_WATCH_STATUSES];
 
     const jobs = await prisma.watchJob.findMany({
       where: {
@@ -159,6 +156,25 @@ export async function requestRoutes(app: FastifyInstance) {
         },
       },
     });
+
+    const activeCount = await prisma.watchJob.count({
+      where: {
+        request: { userId: user.sub },
+        status: { in: [...ACTIVE_WATCH_STATUSES] as never },
+      },
+    });
+
+    const dataSources = describeDataSources({
+      providerMode: env.providerMode,
+      bookingStub:
+        process.env.BOOKING_STUB === "0"
+          ? false
+          : env.providerMode === "fixture" || process.env.BOOKING_STUB === "1",
+    });
+    const sourceByChannel = Object.fromEntries(
+      dataSources.map((c) => [c.channel, c])
+    );
+
     // Explicit field projection so list/detail consumers always see lifecycle metadata
     // (Prisma already returns scalars; map keeps contract stable if select is tightened later).
     const items = await Promise.all(
@@ -172,6 +188,7 @@ export async function requestRoutes(app: FastifyInstance) {
         }
         const travelerIds = (j as { travelerIds?: string[] }).travelerIds ?? [];
         const travelers = await travelerSummariesForIds(user.sub, travelerIds);
+        const ds = sourceByChannel[j.request.channel];
         return {
           id: j.id,
           requestId: j.requestId,
@@ -190,6 +207,13 @@ export async function requestRoutes(app: FastifyInstance) {
           bullJobId: j.bullJobId ?? null,
           /** True when a BullMQ repeatable still exists for this job (no Redis secrets). */
           repeatableArmed,
+          dataSourceHint: ds
+            ? {
+                badge: ds.badge,
+                labelZh: ds.labelZh,
+                provider: ds.provider,
+              }
+            : null,
           createdAt: j.createdAt,
           updatedAt: j.updatedAt,
           request: j.request,
@@ -199,6 +223,11 @@ export async function requestRoutes(app: FastifyInstance) {
     return {
       items,
       labelZh: "我的定时盯票",
+      quota: {
+        maxActive: MAX_ACTIVE_WATCHES_PER_USER,
+        activeCount,
+        remaining: Math.max(0, MAX_ACTIVE_WATCHES_PER_USER - activeCount),
+      },
       limits:
         "Watch + notify + optional assistive auto-create awaiting_login order. No captcha/SMS/face/queue/payment bypass.",
     };
@@ -293,6 +322,22 @@ export async function requestRoutes(app: FastifyInstance) {
     const body = watchRequestSchema.parse(request.body ?? {});
     const row = await prisma.ticketRequest.findFirst({ where: { id, userId: user.sub } });
     if (!row) return reply.code(404).send({ error: "Not found" });
+
+    const activeCount = await prisma.watchJob.count({
+      where: {
+        request: { userId: user.sub },
+        status: { in: [...ACTIVE_WATCH_STATUSES] as never },
+      },
+    });
+    if (activeCount >= MAX_ACTIVE_WATCHES_PER_USER) {
+      return reply.code(400).send({
+        error: "ACTIVE_WATCH_LIMIT",
+        code: "ACTIVE_WATCH_LIMIT",
+        message: `最多同时进行 ${MAX_ACTIVE_WATCHES_PER_USER} 个定时抢票任务（含暂停）。请先取消或完成部分任务后再新建。`,
+        maxActive: MAX_ACTIVE_WATCHES_PER_USER,
+        activeCount,
+      });
+    }
 
     const intervalMs = body.intervalMinutes * 60_000;
     const endsAt = body.endsAt ? new Date(body.endsAt) : null;
@@ -483,6 +528,182 @@ export async function requestRoutes(app: FastifyInstance) {
     };
   });
 
+
+  app.post("/requests/:id/watch/:jobId/pause", {
+    schema: {
+      tags: ["requests"],
+      summary: "Pause one 定时抢票 job (does not affect other concurrent watches)",
+      security: [{ bearerAuth: [] }],
+    },
+  }, async (request, reply) => {
+    const user = await authenticate(request);
+    const { id, jobId } = request.params as { id: string; jobId: string };
+    const row = await prisma.ticketRequest.findFirst({ where: { id, userId: user.sub } });
+    if (!row) return reply.code(404).send({ error: "Not found" });
+
+    const job = await prisma.watchJob.findFirst({ where: { id: jobId, requestId: id } });
+    if (!job) return reply.code(404).send({ error: "Watch job not found" });
+    if (job.status === "cancelled" || job.status === "completed") {
+      return reply.code(400).send({ error: "Watch already terminal", status: job.status });
+    }
+    if (job.status === "paused") {
+      let repeatableArmed = false;
+      try {
+        repeatableArmed = await hasWatchRepeatable(job.id);
+      } catch {
+        repeatableArmed = false;
+      }
+      return { ...job, repeatableArmed, alreadyPaused: true };
+    }
+
+    try {
+      const result = await removeWatchRepeatable({
+        id: job.id,
+        intervalMinutes: job.intervalMinutes,
+        endsAt: job.endsAt,
+        bullJobId: job.bullJobId,
+      });
+      request.log.info(
+        {
+          watchJobId: job.id,
+          removeRepeatableOk: result.removeRepeatableOk,
+          removedRepeatableKeys: result.removedRepeatableKeys,
+          removedJobIds: result.removedJobIds.slice(0, 20),
+        },
+        "Removed BullMQ repeatable for paused watch"
+      );
+    } catch (err) {
+      request.log.warn({ err }, "Failed to remove bull job on pause; marking paused in DB");
+    }
+
+    const updated = await prisma.watchJob.update({
+      where: { id: job.id },
+      data: {
+        status: "paused",
+        statusReason: "Paused by user",
+        statusChangedAt: new Date(),
+        nextRunAt: null,
+      },
+    });
+
+    await prisma.notificationEvent.create({
+      data: {
+        requestId: row.id,
+        type: "watch_paused",
+        title: "定时抢票已暂停",
+        body: `Job ${job.id}`,
+        payload: { watchJobId: job.id },
+      },
+    });
+
+    await logActivity(user.sub, user.email, "watch_pause", `Paused watch ${job.id}`, {
+      requestId: id,
+      watchJobId: job.id,
+    });
+
+    let repeatableArmed = false;
+    try {
+      repeatableArmed = await hasWatchRepeatable(job.id);
+    } catch {
+      repeatableArmed = false;
+    }
+    return { ...updated, repeatableArmed };
+  });
+
+  app.post("/requests/:id/watch/:jobId/resume", {
+    schema: {
+      tags: ["requests"],
+      summary: "Resume a paused 定时抢票 job (re-arms BullMQ repeatable for this watch only)",
+      security: [{ bearerAuth: [] }],
+    },
+  }, async (request, reply) => {
+    const user = await authenticate(request);
+    const { id, jobId } = request.params as { id: string; jobId: string };
+    const row = await prisma.ticketRequest.findFirst({ where: { id, userId: user.sub } });
+    if (!row) return reply.code(404).send({ error: "Not found" });
+
+    const job = await prisma.watchJob.findFirst({ where: { id: jobId, requestId: id } });
+    if (!job) return reply.code(404).send({ error: "Watch job not found" });
+    if (job.status !== "paused") {
+      return reply.code(400).send({
+        error: "Watch is not paused",
+        status: job.status,
+        message: "Only paused watches can be resumed",
+      });
+    }
+
+    const intervalMs = job.intervalMinutes * 60_000;
+    const delayMs =
+      job.startsAt && job.startsAt.getTime() > Date.now()
+        ? job.startsAt.getTime() - Date.now()
+        : 0;
+    const nextRunAt = new Date(Date.now() + (delayMs || intervalMs));
+
+    const queue = getWatchQueue();
+    const payload: WatchJobPayload = {
+      watchJobId: job.id,
+      requestId: row.id,
+      userId: user.sub,
+    };
+
+    // Clear any leftover instances then re-arm (scoped by this watch id only).
+    try {
+      await removeWatchRepeatable({
+        id: job.id,
+        intervalMinutes: job.intervalMinutes,
+        endsAt: job.endsAt,
+        bullJobId: job.bullJobId,
+      });
+    } catch {
+      /* ignore */
+    }
+
+    const bullJob = await queue.add("watch", payload, {
+      jobId: job.id,
+      repeat: {
+        every: intervalMs,
+        ...(job.endsAt ? { endDate: job.endsAt } : {}),
+      },
+    });
+
+    if (delayMs <= 0) {
+      await queue.add("watch-immediate", payload, { jobId: `${job.id}-immediate` });
+    }
+
+    const updated = await prisma.watchJob.update({
+      where: { id: job.id },
+      data: {
+        status: "queued",
+        statusReason: delayMs > 0 ? "Resumed; queued until startsAt" : "Resumed; queued for next query",
+        statusChangedAt: new Date(),
+        nextRunAt,
+        bullJobId: bullJob.id ?? job.id,
+      },
+    });
+
+    await prisma.notificationEvent.create({
+      data: {
+        requestId: row.id,
+        type: "watch_resumed",
+        title: "定时抢票已恢复",
+        body: `Job ${job.id}`,
+        payload: { watchJobId: job.id },
+      },
+    });
+
+    await logActivity(user.sub, user.email, "watch_resume", `Resumed watch ${job.id}`, {
+      requestId: id,
+      watchJobId: job.id,
+    });
+
+    let repeatableArmed = false;
+    try {
+      repeatableArmed = await hasWatchRepeatable(job.id);
+    } catch {
+      repeatableArmed = false;
+    }
+    return { ...updated, repeatableArmed };
+  });
 
   /**
    * Explicit user action: create a draft Order from a WatchJob's bound travelerIds

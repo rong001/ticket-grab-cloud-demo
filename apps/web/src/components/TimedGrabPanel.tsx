@@ -61,9 +61,13 @@ type Props = {
   onStart: () => void;
   onSearch: () => void;
   onCancel?: (jobId: string) => void;
+  onPause?: (jobId: string) => void;
+  onResume?: (jobId: string) => void;
   /** Train + bound travelers: create draft order (no submit). */
   onCreateDraftOrder?: (jobId: string) => void;
 };
+
+const LIVE_WATCH_STATUSES = new Set(["queued", "querying", "has_tickets", "notified", "pending", "active"]);
 
 function formatCountdown(ms: number): string {
   if (ms <= 0) return "即将执行";
@@ -90,7 +94,7 @@ export default function TimedGrabPanel(props: Props) {
   const isTrain = props.channel === "train";
   const now = useNow();
   const activeJobs = useMemo(
-    () => props.jobs.filter((j) => j.status === "active" || j.status === "pending"),
+    () => props.jobs.filter((j) => LIVE_WATCH_STATUSES.has(j.status)),
     [props.jobs]
   );
   const primary = activeJobs[0] ?? props.jobs[0];
@@ -344,7 +348,27 @@ export default function TimedGrabPanel(props: Props) {
                       用已选乘客创建草稿订单
                     </button>
                   )}
-                  {(j.status === "active" || j.status === "pending") && props.onCancel && (
+                  {LIVE_WATCH_STATUSES.has(j.status) && props.onPause && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={props.busy}
+                      onClick={() => props.onPause?.(j.id)}
+                    >
+                      暂停
+                    </button>
+                  )}
+                  {j.status === "paused" && props.onResume && (
+                    <button
+                      type="button"
+                      className="btn-query"
+                      disabled={props.busy}
+                      onClick={() => props.onResume?.(j.id)}
+                    >
+                      恢复
+                    </button>
+                  )}
+                  {(LIVE_WATCH_STATUSES.has(j.status) || j.status === "paused") && props.onCancel && (
                     <button
                       type="button"
                       className="ghost"

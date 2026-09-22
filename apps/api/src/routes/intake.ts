@@ -13,6 +13,7 @@ import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../lib/auth.js";
 import { logActivity } from "../lib/activity.js";
 import { getWatchQueue, getRedis, type WatchJobPayload } from "../lib/queue.js";
+import { ACTIVE_WATCH_STATUSES, MAX_ACTIVE_WATCHES_PER_USER } from "../lib/watchLimits.js";
 import { resolveTravelerIdsForUser, travelerSummariesForIds } from "../lib/travelers.js";
 
 const SESSION_TTL_SEC = 60 * 60; // 1h
@@ -192,6 +193,22 @@ export async function intakeRoutes(app: FastifyInstance) {
       autoOrder: false,
       preferences: payload.watch.preferences,
     });
+
+    const activeCount = await prisma.watchJob.count({
+      where: {
+        request: { userId: user.sub },
+        status: { in: [...ACTIVE_WATCH_STATUSES] as never },
+      },
+    });
+    if (activeCount >= MAX_ACTIVE_WATCHES_PER_USER) {
+      return reply.code(400).send({
+        error: "ACTIVE_WATCH_LIMIT",
+        code: "ACTIVE_WATCH_LIMIT",
+        message: `最多同时进行 ${MAX_ACTIVE_WATCHES_PER_USER} 个定时抢票任务（含暂停）。请先取消或完成部分任务后再新建。`,
+        maxActive: MAX_ACTIVE_WATCHES_PER_USER,
+        activeCount,
+      });
+    }
 
     const intervalMs = watchBody.intervalMinutes * 60_000;
     const startsAt = watchBody.startsAt ? new Date(watchBody.startsAt) : null;

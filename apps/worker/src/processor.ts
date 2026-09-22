@@ -196,7 +196,7 @@ async function maybeAutoOrder(opts: {
 
 export async function processWatchJob(payload: WatchJobPayload): Promise<void> {
   const watch = await prisma.watchJob.findUnique({ where: { id: payload.watchJobId } });
-  if (!watch || watch.status === "cancelled" || watch.status === "completed") {
+  if (!watch || watch.status === "cancelled" || watch.status === "completed" || watch.status === "paused") {
     return;
   }
   if (watch.startsAt && watch.startsAt.getTime() > Date.now()) {

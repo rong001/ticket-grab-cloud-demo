@@ -2473,6 +2473,25 @@ button.btn-show-session:hover {
 .grab-list-card.channel-show {
   border-left: 3px solid var(--show-red);
 }
+.grab-list-card.channel-flight {
+  border-left: 3px solid #0ea5e9;
+}
+.channel-badge {
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+}
+.channel-badge-train {
+  background: var(--rail-blue) !important;
+  color: #fff !important;
+}
+.channel-badge-show {
+  background: var(--show-red) !important;
+  color: #fff !important;
+}
+.channel-badge-flight {
+  background: #0ea5e9 !important;
+  color: #fff !important;
+}
 
 body.theme-damai .timed-grab-countdown {
   background: #fff0f5;

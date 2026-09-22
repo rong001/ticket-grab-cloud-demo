@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, getToken } from "@/lib/api";
-import { formatShanghaiDateTime,  formatFields } from "@/lib/format";
+import { formatShanghaiDateTime, formatFields } from "@/lib/format";
 
 type GrabItem = {
   id: string;
@@ -20,6 +20,8 @@ type GrabItem = {
   preferences?: Record<string, unknown> | null;
   travelerIds?: string[];
   travelers?: { id: string; name: string; idNumberHint?: string; relationship?: string }[];
+  repeatableArmed?: boolean;
+  dataSourceHint?: { badge: string; labelZh: string; provider: string } | null;
   request: {
     id: string;
     channel: string;
@@ -29,12 +31,31 @@ type GrabItem = {
   };
 };
 
-const LIVE_STATUSES = new Set(["queued", "querying", "has_tickets", "notified", "pending", "active"]);
+type Quota = {
+  maxActive: number;
+  activeCount: number;
+  remaining: number;
+};
+
+const LIVE_STATUSES = new Set([
+  "queued",
+  "querying",
+  "has_tickets",
+  "notified",
+  "pending",
+  "active",
+]);
 
 const CHANNEL_LABEL: Record<string, string> = {
-  train: "火车 · 定时抢票",
-  show: "演出 · 定时抢票/开售自动抢",
-  flight: "机票 · 查询/官方跳转演示（实时可售票/票价监控不可用）",
+  train: "火车",
+  show: "演出",
+  flight: "机票",
+};
+
+const CHANNEL_HINT: Record<string, string> = {
+  train: "定时抢票",
+  show: "定时抢票 / 开售自动抢",
+  flight: "查询/官方跳转演示（实时可售票/票价监控不可用）",
 };
 
 function countdown(iso?: string | null): string {
@@ -50,9 +71,17 @@ function countdown(iso?: string | null): string {
   return `${sec}秒`;
 }
 
+function statusBadgeClass(status: string): string {
+  if (status === "paused") return "info";
+  if (status === "cancelled" || status === "failed") return "sold_out";
+  if (LIVE_STATUSES.has(status)) return "watching";
+  return "info";
+}
+
 export default function GrabsPage() {
   const router = useRouter();
   const [items, setItems] = useState<GrabItem[]>([]);
+  const [quota, setQuota] = useState<Quota | null>(null);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -65,8 +94,11 @@ export default function GrabsPage() {
       return;
     }
     const q = filter === "all" ? "?status=all" : "";
-    api<{ items: GrabItem[] }>(`/grabs${q}`)
-      .then((res) => setItems(res.items ?? []))
+    api<{ items: GrabItem[]; quota?: Quota }>(`/grabs${q}`)
+      .then((res) => {
+        setItems(res.items ?? []);
+        setQuota(res.quota ?? null);
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoaded(true));
   }, [router, filter]);
@@ -96,6 +128,37 @@ export default function GrabsPage() {
     }
   }
 
+  async function pause(job: GrabItem) {
+    setBusy(job.id);
+    setError("");
+    try {
+      await api(`/requests/${job.request.id}/watch/${job.id}/pause`, {
+        method: "POST",
+        body: "{}",
+      });
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "暂停失败");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function resume(job: GrabItem) {
+    setBusy(job.id);
+    setError("");
+    try {
+      await api(`/requests/${job.request.id}/watch/${job.id}/resume`, {
+        method: "POST",
+        body: "{}",
+      });
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "恢复失败");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function createDraftOrder(job: GrabItem) {
     setBusy(job.id);
@@ -118,23 +181,38 @@ export default function GrabsPage() {
     }
   }
 
+  const atLimit = quota != null && quota.remaining <= 0;
+
   return (
     <div>
       <div className="page-header">
         <div>
           <h1 className="page-title">我的定时抢票</h1>
           <p className="lead">
-            跨渠道的定时监控任务。有票/开售时通知；可选协助创建待登录订单。验证码、短信、人脸与支付须本人在官方完成。
+            支持同时管理多条高铁/火车、演出、机票监控任务。暂停/取消只影响当前行，互不串扰。验证码、短信、人脸与支付须本人在官方完成。
           </p>
         </div>
         <div className="btn-row" style={{ gap: "0.5rem" }}>
           <Link href="/requests/new">
-            <button type="button" className="btn-query">
+            <button type="button" className="btn-query" disabled={atLimit} title={atLimit ? "已达并发上限" : undefined}>
               新建查票
             </button>
           </Link>
         </div>
       </div>
+
+      {quota && (
+        <p className="meta" style={{ marginBottom: "0.75rem" }}>
+          并发配额 {quota.activeCount}/{quota.maxActive}
+          {quota.remaining > 0 ? ` · 还可新建 ${quota.remaining} 条` : " · 已满"}
+        </p>
+      )}
+
+      {atLimit && (
+        <div className="info-banner live-fail-banner" style={{ marginBottom: "1rem" }} role="status">
+          已达到同时进行中的定时抢票上限（{quota?.maxActive ?? 10}）。请先暂停并取消部分任务后再新建。
+        </div>
+      )}
 
       <div className="chip-row" style={{ marginBottom: "1rem" }} role="group" aria-label="筛选">
         <button
@@ -164,7 +242,7 @@ export default function GrabsPage() {
       {loaded && !items.length && !error && (
         <div className="card empty">
           <p className="empty-title">暂无定时抢票</p>
-          <p className="empty-desc">在查票需求详情页开启「定时抢票」后，任务会显示在这里。</p>
+          <p className="empty-desc">在查票需求详情页开启「定时抢票」后，任务会显示在这里。可同时创建多条（火车+演出+机票）。</p>
           <Link href="/requests/new">
             <button type="button" className="btn-query">
               去查票
@@ -176,16 +254,34 @@ export default function GrabsPage() {
       {items.map((j) => {
         const fields = formatFields(j.request.fields);
         const live = LIVE_STATUSES.has(j.status);
+        const paused = j.status === "paused";
+        const ch = j.request.channel;
         return (
-          <div className={`card grab-list-card channel-${j.request.channel}`} key={j.id}>
+          <div className={`card grab-list-card channel-${ch}`} key={j.id}>
             <div className="item-row">
               <div>
-                <div style={{ marginBottom: "0.35rem" }}>
+                <div style={{ marginBottom: "0.35rem", display: "flex", flexWrap: "wrap", gap: "0.35rem", alignItems: "center" }}>
+                  <span className={`badge channel-badge channel-badge-${ch}`} title={CHANNEL_HINT[ch] ?? ch}>
+                    {CHANNEL_LABEL[ch] ?? ch}
+                  </span>
                   <Link href={`/requests/${j.request.id}`} className="item-title">
-                    {CHANNEL_LABEL[j.request.channel] ?? j.request.channel}
-                  </Link>{" "}
-                  <span className={`badge ${live ? "watching" : "info"}`}>{j.status}</span>
+                    {CHANNEL_HINT[ch] ?? ch}
+                  </Link>
+                  <span className={`badge ${statusBadgeClass(j.status)}`}>{j.status}</span>
+                  {j.dataSourceHint && (
+                    <span
+                      className={`badge data-source-badge ${j.dataSourceHint.badge === "live" ? "watching" : "info"}`}
+                      title={j.dataSourceHint.provider}
+                    >
+                      {j.dataSourceHint.labelZh}
+                    </span>
+                  )}
                   {j.autoOrder && <span className="badge limited">自动建单</span>}
+                  {typeof j.repeatableArmed === "boolean" && (
+                    <span className={`badge ${j.repeatableArmed ? "watching" : "info"}`} title="BullMQ repeatable">
+                      {j.repeatableArmed ? "队列已武装" : "队列未武装"}
+                    </span>
+                  )}
                 </div>
                 <div className="fields-summary">
                   {fields.map((f) => (
@@ -216,7 +312,7 @@ export default function GrabsPage() {
                     查看
                   </button>
                 </Link>
-                {j.request.channel === "train" && (j.travelerIds?.length ?? 0) > 0 && (
+                {ch === "train" && (j.travelerIds?.length ?? 0) > 0 && (
                   <button
                     type="button"
                     className="btn-query"
@@ -228,6 +324,26 @@ export default function GrabsPage() {
                   </button>
                 )}
                 {live && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={busy === j.id}
+                    onClick={() => pause(j)}
+                  >
+                    暂停
+                  </button>
+                )}
+                {paused && (
+                  <button
+                    type="button"
+                    className="btn-query"
+                    disabled={busy === j.id}
+                    onClick={() => resume(j)}
+                  >
+                    恢复
+                  </button>
+                )}
+                {(live || paused) && (
                   <button
                     type="button"
                     className="ghost"

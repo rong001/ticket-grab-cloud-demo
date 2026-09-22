@@ -10,26 +10,28 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash);
 }
 
-export type JwtUser = { sub: string; email: string; role?: string };
+export type JwtUser = { sub: string; email: string };
 
 export async function authenticate(request: FastifyRequest): Promise<JwtUser> {
   const payload = await request.jwtVerify<JwtUser>();
   return payload;
 }
 
-/** Require JWT with role=admin (re-checks DB so demotions take effect). */
-export async function requireAdmin(request: FastifyRequest): Promise<JwtUser> {
-  const payload = await authenticate(request);
+/** Admin gate for /admin/* routes — loads role from DB (JWT has no role claim). */
+export async function requireAdmin(
+  request: FastifyRequest
+): Promise<JwtUser & { role: string }> {
+  const user = await authenticate(request);
   const row = await prisma.user.findUnique({
-    where: { id: payload.sub },
-    select: { id: true, email: true, role: true, active: true },
+    where: { id: user.sub },
+    select: { role: true, active: true },
   });
-  if (!row || !row.active || row.role !== "admin") {
-    const err = new Error("Forbidden");
-    (err as { statusCode?: number }).statusCode = 403;
+  if (!row || row.active === false || row.role !== "admin") {
+    const err = new Error("Forbidden") as Error & { statusCode: number };
+    err.statusCode = 403;
     throw err;
   }
-  return { sub: row.id, email: row.email, role: "admin" };
+  return { ...user, role: row.role };
 }
 
 export function registerAuth(app: FastifyInstance, secret: string, expiresIn: string) {

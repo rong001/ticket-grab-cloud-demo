@@ -310,6 +310,7 @@ export default function RequestDetailPage() {
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "定时抢票开启失败");
+      // ACTIVE_WATCH_LIMIT 400 surfaces via e.message
     } finally {
       setBusy(false);
     }
@@ -328,6 +329,31 @@ export default function RequestDetailPage() {
     }
   }
 
+  async function pauseWatch(jobId: string) {
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/requests/${id}/watch/${jobId}/pause`, { method: "POST", body: "{}" });
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "暂停失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resumeWatch(jobId: string) {
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/requests/${id}/watch/${jobId}/resume`, { method: "POST", body: "{}" });
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "恢复失败");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function createDraftFromWatch(jobId: string) {
     setBusy(true);
@@ -487,6 +513,8 @@ export default function RequestDetailPage() {
         onStart={startWatch}
         onSearch={runSearch}
         onCancel={cancelWatch}
+        onPause={pauseWatch}
+        onResume={resumeWatch}
         onCreateDraftOrder={createDraftFromWatch}
       />
 

@@ -199,6 +199,23 @@ export async function hasWatchRepeatable(watchJobId: string): Promise<boolean> {
     if (r.id === watchJobId) return true;
     if (r.key?.includes(watchJobId)) return true;
     if (!r.key) continue;
+
+    // BullMQ 5: getRepeatableJobs leaves r.id undefined and Redis `data` may be empty.
+    // Match via recomputed MD5(name:jobId:endDate:tz:every) === r.key.
+    if (r.every != null) {
+      const minutes = Math.max(1, Math.round(Number(r.every) / 60_000));
+      if (watchRepeatHash(watchJobId, minutes, null) === r.key) return true;
+      if (r.endDate) {
+        const endMs = Number(r.endDate);
+        if (
+          Number.isFinite(endMs) &&
+          watchRepeatHash(watchJobId, minutes, new Date(endMs)) === r.key
+        ) {
+          return true;
+        }
+      }
+    }
+
     try {
       const raw = await redis.hget(`bull:${WATCH_QUEUE}:repeat:${r.key}`, "data");
       if (raw) {
