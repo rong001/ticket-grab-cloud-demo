@@ -18,6 +18,8 @@ type GrabItem = {
   nextRunAt?: string | null;
   lastRunAt?: string | null;
   preferences?: Record<string, unknown> | null;
+  travelerIds?: string[];
+  travelers?: { id: string; name: string; idNumberHint?: string; relationship?: string }[];
   request: {
     id: string;
     channel: string;
@@ -89,6 +91,28 @@ export default function GrabsPage() {
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "取消失败");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+
+  async function createDraftOrder(job: GrabItem) {
+    setBusy(job.id);
+    setError("");
+    try {
+      const res = await api<{
+        orderId: string;
+        orderPath: string;
+        reused?: boolean;
+        nextSteps?: string[];
+      }>(`/grabs/${job.id}/create-order`, {
+        method: "POST",
+        body: "{}",
+      });
+      router.push(res.orderPath || `/orders/${res.orderId}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "创建草稿订单失败");
     } finally {
       setBusy(null);
     }
@@ -170,6 +194,14 @@ export default function GrabsPage() {
                     </span>
                   ))}
                 </div>
+                {(j.travelers?.length || j.travelerIds?.length) ? (
+                  <p className="meta" style={{ margin: "0.35rem 0 0" }}>
+                    乘车人{" "}
+                    {j.travelers?.length
+                      ? j.travelers.map((t) => `${t.name}${t.idNumberHint ? `(${t.idNumberHint})` : ""}`).join("、")
+                      : `${j.travelerIds!.length} 人已绑定`}
+                  </p>
+                ) : null}
                 <p className="meta" style={{ margin: "0.5rem 0 0" }}>
                   间隔 {j.intervalMinutes} 分钟
                   {j.startsAt ? ` · 开始 ${formatShanghaiDateTime(j.startsAt)}` : ""}
@@ -184,6 +216,17 @@ export default function GrabsPage() {
                     查看
                   </button>
                 </Link>
+                {j.request.channel === "train" && (j.travelerIds?.length ?? 0) > 0 && (
+                  <button
+                    type="button"
+                    className="btn-query"
+                    disabled={busy === j.id}
+                    onClick={() => createDraftOrder(j)}
+                    title="使用本任务已绑定的乘车人 + 最新短名单创建草稿订单（不提交、不扣款）"
+                  >
+                    用已选乘客创建草稿订单
+                  </button>
+                )}
                 {live && (
                   <button
                     type="button"

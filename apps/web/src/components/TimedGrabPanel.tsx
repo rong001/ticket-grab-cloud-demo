@@ -61,6 +61,8 @@ type Props = {
   onStart: () => void;
   onSearch: () => void;
   onCancel?: (jobId: string) => void;
+  /** Train + bound travelers: create draft order (no submit). */
+  onCreateDraftOrder?: (jobId: string) => void;
 };
 
 function formatCountdown(ms: number): string {
@@ -330,16 +332,29 @@ export default function TimedGrabPanel(props: Props) {
                     {j.lastRunAt ? ` · 上次 ${formatShanghaiDateTime(j.lastRunAt)}` : ""}
                   </div>
                 </div>
-                {(j.status === "active" || j.status === "pending") && props.onCancel && (
-                  <button
-                    type="button"
-                    className="ghost"
-                    disabled={props.busy}
-                    onClick={() => props.onCancel?.(j.id)}
-                  >
-                    取消
-                  </button>
-                )}
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                  {isTrain && (j.travelerIds?.length ?? j.travelers?.length ?? 0) > 0 && props.onCreateDraftOrder && (
+                    <button
+                      type="button"
+                      className="btn-query"
+                      disabled={props.busy}
+                      onClick={() => props.onCreateDraftOrder?.(j.id)}
+                      title="用已选乘客创建草稿订单（不提交、不扣款）"
+                    >
+                      用已选乘客创建草稿订单
+                    </button>
+                  )}
+                  {(j.status === "active" || j.status === "pending") && props.onCancel && (
+                    <button
+                      type="button"
+                      className="ghost"
+                      disabled={props.busy}
+                      onClick={() => props.onCancel?.(j.id)}
+                    >
+                      取消
+                    </button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

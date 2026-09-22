@@ -383,6 +383,16 @@ export async function processWatchJob(payload: WatchJobPayload): Promise<void> {
           removed: diff.removed.map((i) => i.id),
           improved: diff.availabilityImproved.map((i) => i.id),
         },
+        // Deep-link hint only — do NOT auto-create orders on has_tickets (surprise drafts).
+        createOrderHint: seatsFound
+          ? {
+              uiPath: "/grabs",
+              apiPath: `/grabs/${watch.id}/create-order`,
+              method: "POST",
+              hasTravelerIds: ((watch as { travelerIds?: string[] }).travelerIds ?? []).length > 0,
+              note: "有绑定乘车人时，请在「我的抢票」手动点「用已选乘客创建草稿订单」（不自动提交/扣款）",
+            }
+          : undefined,
       } as unknown as Prisma.InputJsonValue,
       emailed,
     },

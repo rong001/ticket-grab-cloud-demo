@@ -328,6 +328,23 @@ export default function RequestDetailPage() {
     }
   }
 
+
+  async function createDraftFromWatch(jobId: string) {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await api<{ orderId: string; orderPath: string }>(`/grabs/${jobId}/create-order`, {
+        method: "POST",
+        body: "{}",
+      });
+      router.push(res.orderPath || `/orders/${res.orderId}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "创建草稿订单失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function openWizard(item: Item) {
     setWizardItem(item);
     setSelectedTravelers([]);
@@ -470,6 +487,7 @@ export default function RequestDetailPage() {
         onStart={startWatch}
         onSearch={runSearch}
         onCancel={cancelWatch}
+        onCreateDraftOrder={createDraftFromWatch}
       />
 
       <div className="card">

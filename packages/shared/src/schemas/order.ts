@@ -30,6 +30,15 @@ export const paymentHandoffSchema = z.object({
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 
+/** Create draft order from a WatchJob (grab) — no submit / charge. */
+export const createWatchOrderSchema = z.object({
+  /** Optional; when omitted, server picks latest shortlist item matching watch preferences. */
+  selectedShortlistItemId: z.string().min(1).optional(),
+});
+
+export type CreateWatchOrderInput = z.infer<typeof createWatchOrderSchema>;
+
+
 /** Allowed transitions for the assistive order state machine. */
 export const ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   draft: ["awaiting_login", "submitting", "cancelled", "failed"],

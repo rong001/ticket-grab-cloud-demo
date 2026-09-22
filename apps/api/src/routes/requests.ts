@@ -1,16 +1,79 @@
 import type { FastifyInstance } from "fastify";
 import {
   createRequestSchema,
+  createWatchOrderSchema,
   searchTickets,
   watchRequestSchema,
   type Channel,
+  type ShortlistItem,
 } from "@ticket-grab/shared";
+import type { Prisma } from "@prisma/client";
+import {
+  trainRealSubmitDisabledNextSteps,
+  trainRealSubmitEnabled,
+} from "../lib/bookingFlags.js";
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../lib/auth.js";
 import { logActivity } from "../lib/activity.js";
 import { getWatchQueue, removeWatchRepeatable, hasWatchRepeatable, type WatchJobPayload } from "../lib/queue.js";
 import { env } from "../env.js";
 import { resolveTravelerIdsForUser, travelerSummariesForIds } from "../lib/travelers.js";
+
+
+function asJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
+/** Pick shortlist item: explicit id, else prefs filter, else first available/limited. */
+function pickShortlistItem(
+  items: ShortlistItem[],
+  preferences: Record<string, unknown> | null | undefined,
+  selectedId?: string
+): ShortlistItem | null {
+  if (!items.length) return null;
+  if (selectedId) {
+    const hit = items.find((i) => i.id === selectedId);
+    return hit ?? null;
+  }
+  let pool = items.filter(
+    (i) => i.availability === "available" || i.availability === "limited"
+  );
+  if (!pool.length) pool = [...items];
+  const prefs = preferences ?? {};
+  const preferredTrains = Array.isArray(prefs.preferredTrains)
+    ? prefs.preferredTrains.map(String)
+    : [];
+  const preferredSeats = Array.isArray(prefs.preferredSeats)
+    ? prefs.preferredSeats.map(String)
+    : [];
+  const preferredTiers = Array.isArray(prefs.preferredTiers)
+    ? prefs.preferredTiers.map(String)
+    : [];
+  if (preferredTrains.length) {
+    const filtered = pool.filter((i) => {
+      const no = String(i.meta?.trainNo ?? i.title.split(" ")[0] ?? "");
+      return preferredTrains.some((t) => no.includes(t) || i.title.includes(t));
+    });
+    if (filtered.length) pool = filtered;
+  }
+  if (preferredSeats.length) {
+    const filtered = pool.filter((i) => {
+      const seat = String(i.meta?.seatClass ?? "");
+      return preferredSeats.some(
+        (s) => seat.includes(s) || i.title.includes(s) || i.subtitle?.includes(s)
+      );
+    });
+    if (filtered.length) pool = filtered;
+  }
+  if (preferredTiers.length) {
+    const filtered = pool.filter((i) => {
+      const tier = String(i.meta?.tier ?? "");
+      return preferredTiers.some((t) => tier.includes(t));
+    });
+    if (filtered.length) pool = filtered;
+  }
+  return pool[0] ?? null;
+}
 
 export async function requestRoutes(app: FastifyInstance) {
   app.post("/requests", {
@@ -418,6 +481,177 @@ export async function requestRoutes(app: FastifyInstance) {
       proofHint:
         "Poll GET /api/grabs (or GET /api/requests/:id) for ≥5m: status=cancelled, lastRunAt unchanged, repeatableArmed=false. Optional operator redis dump is not required.",
     };
+  });
+
+
+  /**
+   * Explicit user action: create a draft Order from a WatchJob's bound travelerIds
+   * + latest (or selected) shortlist item. Never submits / charges.
+   */
+  app.post("/grabs/:id/create-order", {
+    schema: {
+      tags: ["requests", "orders"],
+      summary: "Create draft order from grab/watch (bound travelers + shortlist; no submit)",
+      security: [{ bearerAuth: [] }],
+    },
+  }, async (request, reply) => {
+    const user = await authenticate(request);
+    const { id: watchJobId } = request.params as { id: string };
+    const body = createWatchOrderSchema.parse(request.body ?? {});
+
+    const watch = await prisma.watchJob.findFirst({
+      where: { id: watchJobId, request: { userId: user.sub } },
+      include: {
+        request: {
+          include: { shortlists: { orderBy: { createdAt: "desc" }, take: 1 } },
+        },
+      },
+    });
+    if (!watch) return reply.code(404).send({ error: "Watch job not found" });
+
+    const travelerIds = (watch as { travelerIds?: string[] }).travelerIds ?? [];
+    if (!travelerIds.length) {
+      return reply.code(400).send({
+        error: "该抢票任务未绑定乘车人；请先在创建盯票时选择 travelerIds",
+        code: "TRAVELER_IDS_REQUIRED",
+      });
+    }
+
+    const bind = await resolveTravelerIdsForUser({
+      userId: user.sub,
+      travelerIds,
+    });
+    if (!bind.ok) return reply.code(bind.status).send({ error: bind.error });
+
+    const snapshot = watch.request.shortlists[0];
+    const items = (snapshot?.items as unknown as ShortlistItem[] | undefined) ?? [];
+    if (!items.length) {
+      return reply.code(400).send({
+        error: "暂无候选短名单；请等待盯票发现有票或先执行一次搜索",
+        code: "SHORTLIST_EMPTY",
+      });
+    }
+
+    const preferences = (watch.preferences ?? null) as Record<string, unknown> | null;
+    const item = pickShortlistItem(items, preferences, body.selectedShortlistItemId);
+    if (!item) {
+      return reply.code(400).send({
+        error: body.selectedShortlistItemId
+          ? "指定的短名单项不存在于最新快照"
+          : "无法从短名单中选出匹配项",
+        code: "SHORTLIST_ITEM_NOT_FOUND",
+      });
+    }
+
+    // Idempotent: reuse draft/awaiting_login for same watch + item
+    const candidates = await prisma.order.findMany({
+      where: {
+        userId: user.sub,
+        requestId: watch.requestId,
+        selectedShortlistItemId: item.id,
+        status: { in: ["draft", "awaiting_login"] },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    });
+    const existing = candidates.find((o) => {
+      const payload = (o.payload ?? {}) as Record<string, unknown>;
+      return payload.watchJobId === watchJobId;
+    });
+
+    const travelers = await travelerSummariesForIds(user.sub, bind.travelerIds);
+    const nextSteps = [
+      `打开订单页 /orders/${existing?.id ?? "{id}"} 确认车次与乘车人`,
+      "在「账号绑定」(/accounts) 关联本人 12306 会话",
+      "如出现验证码/短信/人脸，请在站内引导步骤手动完成（本站不会自动打码或绕过）",
+      ...trainRealSubmitDisabledNextSteps().filter((s) => /TRAIN_REAL_SUBMIT|支付|乘车人/.test(s)),
+      "本接口只创建草稿订单，不会自动提交或扣款",
+    ];
+
+    if (existing) {
+      nextSteps[0] = `打开订单页 /orders/${existing.id} 确认车次与乘车人`;
+      return {
+        orderId: existing.id,
+        status: existing.status === "awaiting_login" ? "awaiting_login" : "draft",
+        reused: true,
+        watchJobId,
+        selectedShortlistItemId: item.id,
+        shortlistItem: item,
+        travelerIds: bind.travelerIds,
+        travelers,
+        trainRealSubmit: trainRealSubmitEnabled(),
+        nextSteps,
+        orderPath: `/orders/${existing.id}`,
+      };
+    }
+
+    const amount =
+      typeof item.price === "number" ? item.price * bind.travelerIds.length : null;
+
+    const order = await prisma.order.create({
+      data: {
+        userId: user.sub,
+        requestId: watch.requestId,
+        channel: watch.request.channel,
+        status: "draft",
+        selectedShortlistItemId: item.id,
+        travelerIds: bind.travelerIds,
+        amount,
+        currency: item.currency ?? "CNY",
+        payload: asJson({
+          shortlistItem: item,
+          watchJobId,
+          createdFromWatch: true,
+          nextSteps: [
+            `打开订单页确认车次与乘车人`,
+            "在「账号绑定」(/accounts) 关联本人 12306 会话",
+            "验证码/短信/人脸须本人完成；TRAIN_REAL_SUBMIT=1 后才可协助提交",
+            "支付仅在官方 12306 收银台；本站不代扣",
+          ],
+          notes: "由抢票任务手动创建的草稿订单（未提交、未扣款）",
+        }),
+      },
+    });
+
+    nextSteps[0] = `打开订单页 /orders/${order.id} 确认车次与乘车人`;
+
+    await prisma.notificationEvent.create({
+      data: {
+        requestId: watch.requestId,
+        orderId: order.id,
+        type: "watch_order_draft",
+        title: `已创建草稿订单 · ${item.title}`,
+        body: "来自抢票任务的手动建单。未提交、未扣款。请打开订单页继续。",
+        payload: {
+          orderId: order.id,
+          watchJobId,
+          itemId: item.id,
+          orderPath: `/orders/${order.id}`,
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    await logActivity(
+      user.sub,
+      user.email,
+      "watch_order_draft",
+      `Draft order ${order.id} from watch ${watchJobId}`,
+      { orderId: order.id, watchJobId, requestId: watch.requestId, itemId: item.id }
+    );
+
+    return reply.code(201).send({
+      orderId: order.id,
+      status: "draft",
+      reused: false,
+      watchJobId,
+      selectedShortlistItemId: item.id,
+      shortlistItem: item,
+      travelerIds: bind.travelerIds,
+      travelers,
+      trainRealSubmit: trainRealSubmitEnabled(),
+      nextSteps,
+      orderPath: `/orders/${order.id}`,
+    });
   });
 
   app.get("/requests/:id/events", {
