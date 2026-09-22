@@ -8,7 +8,7 @@ import {
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../lib/auth.js";
 import { logActivity } from "../lib/activity.js";
-import { getWatchQueue, type WatchJobPayload } from "../lib/queue.js";
+import { getWatchQueue, getRedis, WATCH_QUEUE, type WatchJobPayload } from "../lib/queue.js";
 import { env } from "../env.js";
 
 export async function requestRoutes(app: FastifyInstance) {
@@ -299,15 +299,40 @@ export async function requestRoutes(app: FastifyInstance) {
 
     try {
       const queue = getWatchQueue();
-      if (job.bullJobId) {
-        const repeatables = await queue.getRepeatableJobs();
-        for (const r of repeatables) {
-          if (r.id === job.id || r.key?.includes(job.id)) {
-            await queue.removeRepeatableByKey(r.key);
+      // BullMQ repeatable keys are content hashes — they do NOT embed our cuid jobId.
+      // Match by (1) r.id / key includes, (2) removeRepeatable(name, every, jobId),
+      // (3) Redis hash payload.watchJobId for leftover orphans.
+      try {
+        await queue.removeRepeatable("watch", { every: job.intervalMinutes * 60_000 }, job.id);
+      } catch {
+        /* pattern may differ */
+      }
+      const repeatables = await queue.getRepeatableJobs();
+      const redis = getRedis();
+      for (const r of repeatables) {
+        let match = r.id === job.id || (r.key?.includes(job.id) ?? false);
+        if (!match && r.key) {
+          try {
+            const raw = await redis.hget(`bull:${WATCH_QUEUE}:repeat:${r.key}`, "data");
+            if (raw) {
+              const parsed = JSON.parse(raw) as { watchJobId?: string };
+              if (parsed.watchJobId === job.id) match = true;
+            }
+          } catch {
+            /* ignore parse/redis errors */
           }
         }
+        if (match) {
+          try {
+            await queue.removeRepeatableByKey(r.key);
+          } catch {
+            /* may already be gone */
+          }
+        }
+      }
+      for (const maybeId of [job.bullJobId, job.id, `${job.id}-immediate`].filter(Boolean)) {
         try {
-          await queue.remove(job.bullJobId);
+          await queue.remove(String(maybeId));
         } catch {
           /* may already be gone */
         }

@@ -1,0 +1,540 @@
+{
+  "generatedAt": "2026-09-22T06:32:50Z",
+  "liveBase": "https://159.75.71.192:18444",
+  "apiBase": "https://159.75.71.192:18444/api",
+  "health": {
+    "ok": true,
+    "providerMode": "live",
+    "bookingStub": false,
+    "trainBookingDryRun": false,
+    "trainLiveQuery": true,
+    "trainRealSubmit": false,
+    "realTrainSubmit": false
+  },
+  "meta": {
+    "providerMode": "live",
+    "queriedAt": "2026-09-22T06:23:54.916Z",
+    "channels": [
+      {
+        "channel": "train",
+        "mode": "live",
+        "liveConfigured": true,
+        "badge": "live",
+        "labelZh": "实时",
+        "provider": "train12306",
+        "notes": "12306 public left-ticket query (kyfw.12306.cn)"
+      },
+      {
+        "channel": "show",
+        "mode": "live",
+        "liveConfigured": true,
+        "badge": "live",
+        "labelZh": "实时",
+        "provider": "show",
+        "notes": "Dianping/Gewara myshow public detail+shows+tickets (实时场次); optional SHOW_PUBLIC_API_URL override. Not Damai login APIs."
+      },
+      {
+        "channel": "flight",
+        "mode": "live",
+        "liveConfigured": true,
+        "badge": "live",
+        "labelZh": "实时",
+        "provider": "opensky",
+        "notes": "OpenSky Network free fallback (no prices; ADS-B departures). Set FLIGHT_OPENSKY=0 to disable. Prefer Amadeus/Aviationstack for booking-quality data."
+      }
+    ],
+    "strictLive": false
+  },
+  "intervalField": "intervalMinutes (Prisma WatchJob.intervalMinutes; API watchRequestSchema; BullMQ repeat.every = intervalMinutes * 60000)",
+  "intervalMinutesUsed": 5,
+  "TRAIN_REAL_SUBMIT": 0,
+  "channels": {
+    "train": {
+      "email": "watchtick_train_1790058236953_4cf1@example.com",
+      "tokenFingerprint": "eyJhbGci…tQ_R0g",
+      "requestId": "cmucagg0f0017hbi85n1f3ywt",
+      "watchJobId": "cmucagg6r001bhbi8q1v17i1n",
+      "intervalMinutes": 5,
+      "intervalField": "intervalMinutes",
+      "pass": {
+        "register": true,
+        "requestCreated": true,
+        "watchCreated": true,
+        "intervalGte5": true,
+        "tickObserved": true,
+        "listDetailUpdated": true,
+        "notificationEvent": true,
+        "cancel": true,
+        "noFurtherTickAfterCancel": true
+      },
+      "overallPass": true,
+      "steps": [
+        {
+          "step": "register_login",
+          "at": "2026-09-22T06:23:57.589Z",
+          "email": "watchtick_train_1790058236953_4cf1@example.com",
+          "tokenFingerprint": "eyJhbGci…tQ_R0g",
+          "registerStatus": 200,
+          "loginStatus": 200
+        },
+        {
+          "step": "create_request",
+          "at": "2026-09-22T06:23:57.826Z",
+          "status": 201,
+          "requestId": "cmucagg0f0017hbi85n1f3ywt",
+          "fields": {
+            "from": "深圳北",
+            "to": "汕尾",
+            "date": "2026-09-25",
+            "timeWindow": "不限",
+            "seatClass": "二等座",
+            "passengers": 1
+          }
+        },
+        {
+          "step": "watch_create",
+          "at": "2026-09-22T06:23:58.070Z",
+          "status": 201,
+          "watchJobId": "cmucagg6r001bhbi8q1v17i1n",
+          "intervalMinutes": 5,
+          "startsAt": "2026-09-22T06:23:52.826Z",
+          "nextRunAt": "2026-09-22T06:28:57.939Z",
+          "statusReason": "Queued for first query",
+          "statusField": "queued"
+        },
+        {
+          "step": "tick_result",
+          "at": "2026-09-22T06:23:59.210Z",
+          "ticked": true,
+          "job": {
+            "id": "cmucagg6r001bhbi8q1v17i1n",
+            "status": "notified",
+            "statusReason": "Notification recorded (email skipped/failed)",
+            "lastRunAt": "2026-09-22T06:23:58.546Z",
+            "nextRunAt": "2026-09-22T06:28:58.546Z",
+            "intervalMinutes": 5
+          },
+          "sampleCount": 1
+        },
+        {
+          "step": "events_after_tick",
+          "at": "2026-09-22T06:23:59.925Z",
+          "status": 200,
+          "count": 2,
+          "types": [
+            "tickets_found",
+            "watch_started"
+          ]
+        },
+        {
+          "step": "post_tick_list_detail",
+          "at": "2026-09-22T06:24:00.791Z",
+          "list": {
+            "status": "notified",
+            "lastRunAt": "2026-09-22T06:23:58.546Z",
+            "nextRunAt": "2026-09-22T06:28:58.546Z",
+            "statusReason": "Notification recorded (email skipped/failed)"
+          },
+          "detail": {
+            "status": "notified",
+            "lastRunAt": "2026-09-22T06:23:58.546Z",
+            "nextRunAt": "2026-09-22T06:28:58.546Z",
+            "statusReason": "Notification recorded (email skipped/failed)",
+            "intervalMinutes": 5
+          }
+        },
+        {
+          "step": "cancel",
+          "at": "2026-09-22T06:24:01.518Z",
+          "status": 200,
+          "jobStatus": "cancelled",
+          "statusReason": "Cancelled by user",
+          "lastRunAt": "2026-09-22T06:23:58.546Z",
+          "nextRunAt": "2026-09-22T06:28:58.546Z"
+        },
+        {
+          "step": "post_cancel_observe",
+          "at": "2026-09-22T06:24:48.385Z",
+          "waitMs": 45000,
+          "status": "cancelled",
+          "statusReason": "Cancelled by user",
+          "lastRunAt": "2026-09-22T06:23:58.546Z",
+          "nextRunAt": "2026-09-22T06:28:58.546Z",
+          "lastRunUnchanged": true,
+          "eventTypes": [
+            "watch_cancelled",
+            "tickets_found",
+            "watch_started"
+          ]
+        }
+      ],
+      "events": [
+        {
+          "id": "cmucaggnz0003kjvdt48foju7",
+          "type": "tickets_found",
+          "title": "发现可购票！改进 14 / 新增 40",
+          "body": "Live data from train12306.\n数据源：实时\nImproved: C8096 深圳北 → 汕尾; C9948 深圳北 → 汕尾; G9714 深圳北 → 汕尾; C8090 深圳北 → 汕尾; D9716 深圳北 → 陆丰; C8076 深圳北 → 汕尾; C8076 深圳北 → 陆丰; G9742 深圳北 → 鲘门; G9742 深圳北 → 汕尾; D9766 深圳北 → 汕尾; D4456 深圳北 → 陆丰; C8060 深圳北 → 汕尾; C6738 深圳北 → 汕尾; D9762 深圳北 → 陆丰\nSnapshot: cmucaggna0001kjvdycult81f",
+          "emailed": false,
+          "createdAt": "2026-09-22T06:23:58.560Z",
+          "payload": {
+            "snapshotId": "cmucaggna0001kjvdycult81f",
+            "liveOk": true
+          }
+        },
+        {
+          "id": "cmucagg79001dhbi8jf1xsoff",
+          "type": "watch_started",
+          "title": "定时抢票已开启（每 5 分钟）",
+          "body": "No end date · Starts at 2026-09-22T06:23:52.826Z · notify only · prefs={\"notify\":true}",
+          "emailed": false,
+          "createdAt": "2026-09-22T06:23:57.957Z",
+          "payload": {
+            "watchJobId": "cmucagg6r001bhbi8q1v17i1n"
+          }
+        }
+      ]
+    },
+    "show": {
+      "email": "watchtick_show_1790058288385_8213@example.com",
+      "tokenFingerprint": "eyJhbGci…S0fBGs",
+      "requestId": "cmucahjp8001qhbi8p7l0cb5d",
+      "watchJobId": "cmucahjvu001uhbi8zx08234f",
+      "intervalMinutes": 5,
+      "intervalField": "intervalMinutes",
+      "pass": {
+        "register": true,
+        "requestCreated": true,
+        "watchCreated": true,
+        "intervalGte5": true,
+        "tickObserved": true,
+        "listDetailUpdated": true,
+        "notificationEvent": true,
+        "cancel": true,
+        "noFurtherTickAfterCancel": true
+      },
+      "overallPass": true,
+      "steps": [
+        {
+          "step": "register_login",
+          "at": "2026-09-22T06:24:49.029Z",
+          "email": "watchtick_show_1790058288385_8213@example.com",
+          "tokenFingerprint": "eyJhbGci…S0fBGs",
+          "registerStatus": 200,
+          "loginStatus": 200
+        },
+        {
+          "step": "create_request",
+          "at": "2026-09-22T06:24:49.262Z",
+          "status": 201,
+          "requestId": "cmucahjp8001qhbi8p7l0cb5d",
+          "fields": {
+            "eventName": "周杰伦嘉年华演唱会",
+            "city": "上海",
+            "venue": "梅赛德斯-奔驰文化中心",
+            "date": "2026-12-31",
+            "tier": "内场680",
+            "quantity": 1
+          }
+        },
+        {
+          "step": "watch_create",
+          "at": "2026-09-22T06:24:49.504Z",
+          "status": 201,
+          "watchJobId": "cmucahjvu001uhbi8zx08234f",
+          "intervalMinutes": 5,
+          "startsAt": "2026-09-22T06:24:44.262Z",
+          "nextRunAt": "2026-09-22T06:29:49.386Z",
+          "statusReason": "Queued for first query",
+          "statusField": "queued"
+        },
+        {
+          "step": "tick_result",
+          "at": "2026-09-22T06:24:50.194Z",
+          "ticked": true,
+          "job": {
+            "id": "cmucahjvu001uhbi8zx08234f",
+            "status": "notified",
+            "statusReason": "Notification recorded (email skipped/failed)",
+            "lastRunAt": "2026-09-22T06:24:49.917Z",
+            "nextRunAt": "2026-09-22T06:29:49.917Z",
+            "intervalMinutes": 5
+          },
+          "sampleCount": 1
+        },
+        {
+          "step": "events_after_tick",
+          "at": "2026-09-22T06:24:50.423Z",
+          "status": 200,
+          "count": 2,
+          "types": [
+            "tickets_found",
+            "watch_started"
+          ]
+        },
+        {
+          "step": "post_tick_list_detail",
+          "at": "2026-09-22T06:24:50.883Z",
+          "list": {
+            "status": "notified",
+            "lastRunAt": "2026-09-22T06:24:49.917Z",
+            "nextRunAt": "2026-09-22T06:29:49.917Z",
+            "statusReason": "Notification recorded (email skipped/failed)"
+          },
+          "detail": {
+            "status": "notified",
+            "lastRunAt": "2026-09-22T06:24:49.917Z",
+            "nextRunAt": "2026-09-22T06:29:49.917Z",
+            "statusReason": "Notification recorded (email skipped/failed)",
+            "intervalMinutes": 5
+          }
+        },
+        {
+          "step": "cancel",
+          "at": "2026-09-22T06:24:51.121Z",
+          "status": 200,
+          "jobStatus": "cancelled",
+          "statusReason": "Cancelled by user",
+          "lastRunAt": "2026-09-22T06:24:49.917Z",
+          "nextRunAt": "2026-09-22T06:29:49.917Z"
+        },
+        {
+          "step": "post_cancel_observe",
+          "at": "2026-09-22T06:25:37.788Z",
+          "waitMs": 45000,
+          "status": "cancelled",
+          "statusReason": "Cancelled by user",
+          "lastRunAt": "2026-09-22T06:24:49.917Z",
+          "nextRunAt": "2026-09-22T06:29:49.917Z",
+          "lastRunUnchanged": true,
+          "eventTypes": [
+            "watch_cancelled",
+            "tickets_found",
+            "watch_started"
+          ]
+        }
+      ],
+      "events": [
+        {
+          "id": "cmucahkao0009kjvd6xkx3nh2",
+          "type": "tickets_found",
+          "title": "开售/有票提醒！改进 1 / 新增 4",
+          "body": "Live sessions from Dianping/Gewara myshow (猫眼/格瓦拉/点评公开场次). Damai official APIs often need login/risk control — checkout remains assistive handoff to 大麦/猫眼.\n数据源：实时\nImproved: 时光机 广州 嘉年华2026周杰伦世界巡回演唱会\nSnapshot: cmucahkai0007kjvdcmqx126s",
+          "emailed": false,
+          "createdAt": "2026-09-22T06:24:49.921Z",
+          "payload": {
+            "snapshotId": "cmucahkai0007kjvdcmqx126s",
+            "liveOk": true
+          }
+        },
+        {
+          "id": "cmucahjw1001whbi8syylvc4c",
+          "type": "watch_started",
+          "title": "定时抢票 / 开售自动抢已开启（每 5 分钟）",
+          "body": "No end date · Starts at 2026-09-22T06:24:44.262Z · notify only · prefs={\"notify\":true}",
+          "emailed": false,
+          "createdAt": "2026-09-22T06:24:49.393Z",
+          "payload": {
+            "watchJobId": "cmucahjvu001uhbi8zx08234f"
+          }
+        }
+      ]
+    },
+    "flight": {
+      "email": "watchtick_flight_1790058337792_c0cf@example.com",
+      "tokenFingerprint": "eyJhbGci…FMSCmw",
+      "requestId": "cmucaimaa0029hbi80w94agnp",
+      "watchJobId": "cmucaimgk002dhbi8ot05qvrp",
+      "intervalMinutes": 5,
+      "intervalField": "intervalMinutes",
+      "pass": {
+        "register": true,
+        "requestCreated": true,
+        "watchCreated": true,
+        "intervalGte5": true,
+        "tickObserved": true,
+        "listDetailUpdated": true,
+        "notificationEvent": true,
+        "cancel": true,
+        "noFurtherTickAfterCancel": true
+      },
+      "overallPass": true,
+      "steps": [
+        {
+          "step": "register_login",
+          "at": "2026-09-22T06:25:39.032Z",
+          "email": "watchtick_flight_1790058337792_c0cf@example.com",
+          "tokenFingerprint": "eyJhbGci…FMSCmw",
+          "registerStatus": 200,
+          "loginStatus": 200
+        },
+        {
+          "step": "create_request",
+          "at": "2026-09-22T06:25:39.262Z",
+          "status": 201,
+          "requestId": "cmucaimaa0029hbi80w94agnp",
+          "fields": {
+            "from": "SZX",
+            "to": "PVG",
+            "date": "2026-09-25",
+            "cabin": "经济舱",
+            "passengers": 1
+          }
+        },
+        {
+          "step": "watch_create",
+          "at": "2026-09-22T06:25:39.496Z",
+          "status": 201,
+          "watchJobId": "cmucaimgk002dhbi8ot05qvrp",
+          "intervalMinutes": 5,
+          "startsAt": "2026-09-22T06:25:34.262Z",
+          "nextRunAt": "2026-09-22T06:30:39.380Z",
+          "statusReason": "Queued for first query",
+          "statusField": "queued"
+        },
+        {
+          "step": "tick_result",
+          "at": "2026-09-22T06:25:48.819Z",
+          "ticked": true,
+          "job": {
+            "id": "cmucaimgk002dhbi8ot05qvrp",
+            "status": "queued",
+            "statusReason": "No actionable change; waiting next interval",
+            "lastRunAt": "2026-09-22T06:25:40.964Z",
+            "nextRunAt": "2026-09-22T06:30:40.964Z",
+            "intervalMinutes": 5
+          },
+          "sampleCount": 2
+        },
+        {
+          "step": "events_after_tick",
+          "at": "2026-09-22T06:25:53.167Z",
+          "status": 200,
+          "count": 2,
+          "types": [
+            "watch_alert",
+            "watch_started"
+          ]
+        },
+        {
+          "step": "post_tick_list_detail",
+          "at": "2026-09-22T06:25:55.720Z",
+          "list": {
+            "status": "queued",
+            "lastRunAt": "2026-09-22T06:25:40.964Z",
+            "nextRunAt": "2026-09-22T06:30:40.964Z",
+            "statusReason": "No actionable change; waiting next interval"
+          },
+          "detail": {
+            "status": "queued",
+            "lastRunAt": "2026-09-22T06:25:40.964Z",
+            "nextRunAt": "2026-09-22T06:30:40.964Z",
+            "statusReason": "No actionable change; waiting next interval",
+            "intervalMinutes": 5
+          }
+        },
+        {
+          "step": "cancel",
+          "at": "2026-09-22T06:25:55.948Z",
+          "status": 200,
+          "jobStatus": "cancelled",
+          "statusReason": "Cancelled by user",
+          "lastRunAt": "2026-09-22T06:25:40.964Z",
+          "nextRunAt": "2026-09-22T06:30:40.964Z"
+        },
+        {
+          "step": "post_cancel_observe",
+          "at": "2026-09-22T06:26:42.339Z",
+          "waitMs": 45000,
+          "status": "cancelled",
+          "statusReason": "Cancelled by user",
+          "lastRunAt": "2026-09-22T06:25:40.964Z",
+          "nextRunAt": "2026-09-22T06:30:40.964Z",
+          "lastRunUnchanged": true,
+          "eventTypes": [
+            "watch_cancelled",
+            "watch_alert",
+            "watch_started"
+          ]
+        }
+      ],
+      "events": [
+        {
+          "id": "cmucainon000fkjvdyodiri9a",
+          "type": "watch_alert",
+          "title": "盯票更新：改进 0 / 新增 0",
+          "body": "实时源暂不可用：opensky: HTTP 404\n数据源：非实时（fixture/回退）\nSnapshot: cmucainoi000dkjvdlrum6ldc",
+          "emailed": false,
+          "createdAt": "2026-09-22T06:25:40.967Z",
+          "payload": {
+            "snapshotId": "cmucainoi000dkjvdlrum6ldc",
+            "liveOk": false
+          }
+        },
+        {
+          "id": "cmucaimgq002fhbi8fg7xmbav",
+          "type": "watch_started",
+          "title": "定时盯票已开启（每 5 分钟）",
+          "body": "No end date · Starts at 2026-09-22T06:25:34.262Z · notify only · prefs={\"notify\":true}",
+          "emailed": false,
+          "createdAt": "2026-09-22T06:25:39.386Z",
+          "payload": {
+            "watchJobId": "cmucaimgk002dhbi8ot05qvrp"
+          }
+        }
+      ]
+    }
+  },
+  "shortlistSnapshots": [
+    {
+      "requestId": "cmucagg0f0017hbi85n1f3ywt",
+      "provider": "train12306",
+      "mode": "live",
+      "liveOk": true,
+      "itemCount": 40,
+      "notes": "Live data from train12306."
+    },
+    {
+      "requestId": "cmucahjp8001qhbi8p7l0cb5d",
+      "provider": "show",
+      "mode": "live",
+      "liveOk": true,
+      "itemCount": 4,
+      "notes": "Live sessions from Dianping/Gewara myshow"
+    },
+    {
+      "requestId": "cmucaimaa0029hbi80w94agnp",
+      "provider": "flight",
+      "mode": "fixture",
+      "liveOk": false,
+      "itemCount": 0,
+      "notes": "实时源暂不可用：opensky: HTTP 404"
+    }
+  ],
+  "smtp": {
+    "configured": false,
+    "workerError": "SMTP send failed Error: connect ECONNREFUSED 127.0.0.1:587",
+    "blocking": true,
+    "template": "SMTP_TEMPLATE.env.example"
+  },
+  "cancelProof": {
+    "postIntervalDbObserveAt": "2026-09-22T06:31:15Z",
+    "postIntervalNote": "All three jobs still cancelled; lastRunAt unchanged after full ≥5m nextRunAt window. Worker may still dequeue orphan BullMQ repeats (matcher gap at test time) but processor early-returns — no lastRunAt/status update.",
+    "bullmqOrphanAtTest": true,
+    "bullmqOrphanCleanupAt": "2026-09-22T06:32:00Z",
+    "bullmqOrphanCleanup": [
+      "77aa2d5f6d31b67f4daa8281c1c5cf35 → train cmucagg6r001bhbi8q1v17i1n",
+      "12aa13e06de45d4b86bb27c32633de76 → show cmucahjvu001uhbi8zx08234f",
+      "9ad13a1384020b6c47ff9c3a435ecd63 → flight cmucaimgk002dhbi8ot05qvrp"
+    ],
+    "cancelMatcherFix": "apps/api/src/routes/requests.ts now matches repeatable Redis payload.watchJobId"
+  },
+  "labels": {
+    "submitGate": "通过",
+    "watchTickItem": {
+      "train": "pass",
+      "show": "pass",
+      "flight": "partial — tick/cancel machinery pass; OpenSky live query FAIL (HTTP 404 → fixture)"
+    },
+    "overallProduct": "待独立验收"
+  }
+}
