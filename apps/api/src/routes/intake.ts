@@ -163,9 +163,14 @@ export async function intakeRoutes(app: FastifyInstance) {
         : typeof fieldsObj.quantity === "number"
           ? fieldsObj.quantity
           : null;
+    const selectedIds = Array.isArray(body.travelerIds)
+      ? [...new Set(body.travelerIds.filter(Boolean))]
+      : [];
+    // When travelerIds provided: enforce ownership, authorized consent, and length vs passengers.
+    // When omitted: count-only watch (guest/login without bind).
     const bind = await resolveTravelerIdsForUser({
       userId: user.sub,
-      travelerIds: body.travelerIds,
+      travelerIds: selectedIds.length ? selectedIds : undefined,
       passengers: passengersHint,
     });
     if (!bind.ok) return reply.code(bind.status).send({ error: bind.error });
