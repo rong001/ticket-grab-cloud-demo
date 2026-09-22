@@ -59,7 +59,8 @@ function relationshipLabel(r?: string): string {
 }
 
 export default function OrderDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams<{ id: string }>();
+  const id = typeof params?.id === "string" ? params.id : "";
   const router = useRouter();
   const [data, setData] = useState<OrderDetail | null>(null);
   const [error, setError] = useState("");

@@ -168,7 +168,8 @@ function seatsFromItem(item: Item): string[] {
 type WizardPhase = null | "seat" | "passengers" | "confirm";
 
 export default function RequestDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams<{ id: string }>();
+  const id = typeof params?.id === "string" ? params.id : "";
   const router = useRouter();
   const [data, setData] = useState<RequestDetail | null>(null);
   const [travelers, setTravelers] = useState<Traveler[]>([]);
