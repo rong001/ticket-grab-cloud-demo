@@ -505,7 +505,7 @@ export const flightAdapter: TicketAdapter = {
     if (mode === "live") {
       // Schedule/ADS-B honesty: last fetch outcome (429/404 → false). Config alone never sets live.
       const scheduleProviderOk =
-        result.liveOk &&
+        result.liveOk === true &&
         (provider === "opensky" ||
           provider === "aviationstack" ||
           provider === "amadeus" ||
