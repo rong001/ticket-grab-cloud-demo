@@ -56,7 +56,8 @@ Also verified Origin 18090 → single 18090; unknown Origin → no ACAO.
 
 ## Commit SHAs
 
-(filled after push)
+- Private:  — https://github.com/rong001/ticket-grab-cloud/commit/67dd78ff1a7bc78d439b53480718041c44582660
+- Public demo:  — https://github.com/rong001/ticket-grab-cloud-demo/commit/690027c764a48f6b8bacf3be271d59f4a80d4c8b
 
 ## Live evidence (API)
 
