@@ -116,34 +116,176 @@ function isoDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function parseGrabStart(raw: string, now = new Date()): string | undefined {
+/** Asia/Shanghai wall-clock parts for `now`. */
+function shanghaiParts(now: Date): { y: number; m: number; d: number; h: number; min: number } {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = Object.fromEntries(
+    fmt.formatToParts(now).filter((p) => p.type !== "literal").map((p) => [p.type, p.value])
+  );
+  return {
+    y: Number(parts.year),
+    m: Number(parts.month),
+    d: Number(parts.day),
+    h: Number(parts.hour === "24" ? "0" : parts.hour),
+    min: Number(parts.minute),
+  };
+}
+
+/** Build ISO Z from Asia/Shanghai local civil time. */
+function shanghaiLocalToIso(y: number, m: number, d: number, h: number, min: number): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return new Date(`${y}-${pad(m)}-${pad(d)}T${pad(h)}:${pad(min)}:00+08:00`).toISOString();
+}
+
+function addShanghaiDays(y: number, m: number, d: number, delta: number): { y: number; m: number; d: number } {
+  // Noon UTC+8 avoids DST edge issues (China has no DST).
+  const base = new Date(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}T12:00:00+08:00`);
+  base.setTime(base.getTime() + delta * 86400000);
+  const p = shanghaiParts(base);
+  return { y: p.y, m: p.m, d: p.d };
+}
+
+/**
+ * Explicit 开抢/盯票 phrasing (or bare 现在/立刻 when that is the whole answer).
+ * Travel windows like「上午8点到10点」/「8点出发」 must NOT count.
+ */
+function hasExplicitGrabStartIntent(s: string): boolean {
+  if (/开抢|盯票|开始抢|开始盯|抢票开始|盯票开始|开盯|开始监控|开始看票|开始抢票|开始盯票/.test(s)) {
+    return true;
+  }
+  // Bare immediacy answers (short-answer or standalone)
+  if (/^(现在|立刻|马上|立即)([!！。.\s]*)$/.test(s.trim())) return true;
+  if (/(现在|立刻|马上|立即)\s*(开抢|盯票|开始抢|开始盯|开始|抢票|盯票)/.test(s)) return true;
+  return false;
+}
+
+/** True when utterance contains a travel time *range* (never a grab-start by itself). */
+function hasTravelTimeRange(s: string): boolean {
+  return (
+    /(\d{1,2}:\d{2})\s*[-~～到至]\s*(\d{1,2}:\d{2})/.test(s) ||
+    /(\d{1,2})\s*[:：点]\s*(?:\d{2}\s*)?[-~～到至]\s*(\d{1,2})\s*[:：点]?/.test(s) ||
+    /(上午|早上|早晨|中午|下午|晚上|傍晚).{0,6}(\d{1,2})\s*[:：点].{0,6}(到|至|-|~|～).{0,6}(\d{1,2})\s*[:：点]?/.test(s)
+  );
+}
+
+/**
+ * Parse grab-start datetime.
+ * @param requireIntent When true (free-form extract), only accept explicit 开抢/盯票/现在 phrasing.
+ *                      When false (assistant asked for grabStartAt), accept short time answers.
+ * Times interpreted in Asia/Shanghai; returned as ISO Z. Past times → undefined.
+ */
+function parseGrabStart(
+  raw: string,
+  now = new Date(),
+  requireIntent = true
+): string | undefined {
   const s = raw.trim();
-  if (/现在|立刻|马上|立即/.test(s)) return now.toISOString();
-  const full = s.match(/(\d{4})[./-](\d{1,2})[./-](\d{1,2})[ T]?(\d{1,2}):(\d{2})/);
+  if (!s) return undefined;
+
+  // Free-form: never invent grabStartAt from travel windows / bare clocks / 出发 times.
+  if (requireIntent) {
+    if (!hasExplicitGrabStartIntent(s)) return undefined;
+    // Even with 开抢 nearby, a clear travel range in the same utterance is not the grab clock
+    // unless grab phrasing wraps a specific start time — handled below via grab-local matchers.
+  } else {
+    // Short-answer mode: still refuse pure travel ranges (user pasted window by mistake)
+    if (hasTravelTimeRange(s) && !hasExplicitGrabStartIntent(s)) return undefined;
+    if (/出发/.test(s) && !hasExplicitGrabStartIntent(s)) return undefined;
+  }
+
+  const sp = shanghaiParts(now);
+
+  // Immediacy: 现在 / 立刻开抢 / 马上盯票 — ignore unrelated travel clocks elsewhere.
+  // Reject only when a clock is attached to the immediacy word itself (现在8点开抢).
+  if (/(现在|立刻|马上|立即)(?!\s*\d)/.test(s)) {
+    return now.toISOString();
+  }
+
+  // Prefer relative day + clock near grab intent: 明天8点开抢 / 今晚20:00 / 后天9点
+  // (Must run BEFORE full-datetime — otherwise "2026-09-29 08:00-10:00 … 明天8点开抢"
+  //  wrongly binds travel date+window start as grabStartAt.)
+  const rel = s.match(/(今晚|今天|今日|明天|明日|后天)\s*(\d{1,2})[:：点](\d{2})?/);
+  if (rel) {
+    let day = { y: sp.y, m: sp.m, d: sp.d };
+    const label = rel[1]!;
+    if (label === "明天" || label === "明日") day = addShanghaiDays(day.y, day.m, day.d, 1);
+    else if (label === "后天") day = addShanghaiDays(day.y, day.m, day.d, 2);
+    const iso = shanghaiLocalToIso(day.y, day.m, day.d, Number(rel[2]), Number(rel[3] ?? 0));
+    if (new Date(iso).getTime() < now.getTime() - 60_000) return undefined;
+    return iso;
+  }
+
+  // Clock glued to grab keywords: 「8点开抢」「开抢8点」
+  const nearGrabEarly =
+    s.match(/(?:开抢|盯票|开始抢|开始盯|抢票|盯票开始|开抢时间)[^\d]{0,6}(\d{1,2})[:：点](\d{2})?/) ||
+    s.match(/(\d{1,2})[:：点](\d{2})?[^\d开抢盯]{0,6}(?:开抢|盯票|开始抢|开始盯)/);
+  if (nearGrabEarly) {
+    let day = { y: sp.y, m: sp.m, d: sp.d };
+    let iso = shanghaiLocalToIso(day.y, day.m, day.d, Number(nearGrabEarly[1]), Number(nearGrabEarly[2] ?? 0));
+    if (new Date(iso).getTime() < now.getTime() - 60_000) {
+      day = addShanghaiDays(day.y, day.m, day.d, 1);
+      iso = shanghaiLocalToIso(day.y, day.m, day.d, Number(nearGrabEarly[1]), Number(nearGrabEarly[2] ?? 0));
+    }
+    if (new Date(iso).getTime() < now.getTime() - 60_000) return undefined;
+    return iso;
+  }
+
+  // Full datetime: 2026-10-01 09:00 — but NOT travel windows like 2026-09-29 08:00-10:00
+  const full = s.match(/(\d{4})[./-](\d{1,2})[./-](\d{1,2})[ T](\d{1,2})[:：](\d{2})/);
   if (full) {
-    const d = new Date(
-      Number(full[1]),
-      Number(full[2]) - 1,
-      Number(full[3]),
-      Number(full[4]),
-      Number(full[5])
-    );
-    return d.toISOString();
+    const afterIdx = (full.index ?? 0) + full[0].length;
+    const after = s.slice(afterIdx, afterIdx + 3);
+    // Reject if this clock starts a range (08:00-10:00 / 08:00~10:00 / 08:00到10:00)
+    if (/^\s*[-~～到至]/.test(after)) {
+      /* travel window — ignore */
+    } else {
+      const iso = shanghaiLocalToIso(
+        Number(full[1]),
+        Number(full[2]),
+        Number(full[3]),
+        Number(full[4]),
+        Number(full[5])
+      );
+      if (new Date(iso).getTime() >= now.getTime() - 60_000) return iso;
+    }
   }
-  const tonight = s.match(/(今晚|今天|今日)\s*(\d{1,2})[:：点](\d{2})?/);
-  if (tonight) {
-    const d = new Date(now);
-    d.setHours(Number(tonight[2]), Number(tonight[3] ?? 0), 0, 0);
-    return d.toISOString();
+
+  // Bare clock with grab intent (or short-answer): 8点 / 08:00 / 20点30
+  // Skip if this clock is clearly part of a travel range when requireIntent (already gated),
+  // or when 「出发」 marks departure time.
+  if (/出发/.test(s) && !hasExplicitGrabStartIntent(s)) return undefined;
+
+  // Prefer clock near grab keywords when present
+  const nearGrab =
+    s.match(/(?:开抢|盯票|开始抢|开始盯|抢票|盯票开始|开抢时间)[^\d]{0,6}(\d{1,2})[:：点](\d{2})?/) ||
+    s.match(/(\d{1,2})[:：点](\d{2})?[^\d开抢盯]{0,6}(?:开抢|盯票|开始抢|开始盯)/);
+  const hm = nearGrab || (!requireIntent || hasExplicitGrabStartIntent(s) ? s.match(/(\d{1,2})[:：点](\d{2})?/) : null);
+  // Avoid matching the first number of a range like 8点到10点 when no grab intent on that clock
+  if (hm && hasTravelTimeRange(s) && !nearGrab) {
+    // e.g. 「明天上午8点到10点开抢」 is odd; require nearGrab
+    if (!/开抢|盯票/.test(s)) return undefined;
   }
-  const hm = s.match(/(\d{1,2})[:：点](\d{2})?/);
-  if (hm && !/\d{4}/.test(s)) {
-    const d = new Date(now);
-    d.setHours(Number(hm[1]), Number(hm[2] ?? 0), 0, 0);
-    if (d.getTime() < now.getTime()) d.setDate(d.getDate() + 1);
-    return d.toISOString();
+  if (hm && !/\d{4}[./-]\d{1,2}[./-]\d{1,2}/.test(s)) {
+    let day = { y: sp.y, m: sp.m, d: sp.d };
+    let iso = shanghaiLocalToIso(day.y, day.m, day.d, Number(hm[1]), Number(hm[2] ?? 0));
+    if (new Date(iso).getTime() < now.getTime() - 60_000) {
+      // roll to next Shanghai calendar day
+      day = addShanghaiDays(day.y, day.m, day.d, 1);
+      iso = shanghaiLocalToIso(day.y, day.m, day.d, Number(hm[1]), Number(hm[2] ?? 0));
+    }
+    if (new Date(iso).getTime() < now.getTime() - 60_000) return undefined;
+    return iso;
   }
-  // Date-only strings fill the date field, not grabStartAt — require explicit time / 现在.
+
+  // Date-only is not enough in free-form; short-answer may set midnight+08:00 if future
   return undefined;
 }
 
@@ -303,6 +445,13 @@ function extractTimeWindow(text: string): string | undefined {
     const b = `${cnRange[3]!.padStart(2, "0")}:${(cnRange[4] ?? "00").padStart(2, "0")}`;
     return `${a}-${b}`;
   }
+  // Single departure clock: 「9月29日8点出发」 / 「上午8点出发」 → travel window, not grabStartAt
+  const depart = text.match(/(\d{1,2})\s*[:：点]\s*(\d{2})?\s*(?:出发|发车|开车)/);
+  if (depart) {
+    const hh = depart[1]!.padStart(2, "0");
+    const mm = (depart[2] ?? "00").padStart(2, "0");
+    return `${hh}:${mm}`;
+  }
   if (/上午|早上|早晨/.test(text)) return "06:00-12:00";
   if (/中午/.test(text)) return "11:00-14:00";
   if (/下午/.test(text)) return "12:00-18:00";
@@ -381,7 +530,9 @@ export function extractIntakePatch(text: string, current: IntakeFields, now = ne
   const pax = extractPassengers(text);
   if (pax != null && !current.passengers) patch.passengers = pax;
 
-  const grab = parseGrabStart(text, now);
+  // Free-form: grabStartAt only when user EXPLICITLY says 开抢/盯票/现在 etc.
+  // Travel windows (上午8点到10点 / 8:00-10:00 / N点出发) must never become grabStartAt.
+  const grab = parseGrabStart(text, now, true);
   if (grab && !current.grabStartAt) patch.grabStartAt = grab;
 
   return patch;
@@ -439,10 +590,14 @@ export function applyShortAnswer(
     return p != null ? { passengers: p } : {};
   }
   if (field === "grabStartAt") {
-    const g = parseGrabStart(t, now);
+    // Assistant asked for grab-start: accept short times / 现在 (intent already implied by question).
+    const g = parseGrabStart(t, now, false);
     if (g) return { grabStartAt: g };
     const d = normalizeDateToken(t, now);
-    if (d) return { grabStartAt: new Date(`${d}T00:00:00+08:00`).toISOString() };
+    if (d) {
+      const iso = new Date(`${d}T00:00:00+08:00`).toISOString();
+      if (new Date(iso).getTime() >= now.getTime() - 60_000) return { grabStartAt: iso };
+    }
     return {};
   }
   return {};
@@ -614,6 +769,13 @@ export function processTurn(
   }
 
   const fields: IntakeFields = { ...session.fields, ...patch };
+  // Invalid / past grabStartAt → clear and ask again (no confirmation card)
+  if (fields.grabStartAt) {
+    const t = new Date(fields.grabStartAt).getTime();
+    if (!Number.isFinite(t) || t < now.getTime() - 60_000) {
+      delete fields.grabStartAt;
+    }
+  }
   // Defaults after channel known
   if (fields.channel && fields.passengers == null && patch.passengers == null) {
     /* still ask */

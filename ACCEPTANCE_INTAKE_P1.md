@@ -11,11 +11,12 @@ Monitor + official redirect only; never auto-purchase.
 |------|----------|--------|
 | `2026-09-29北京南到上海虹桥，08:00-10:00，二等座，两张` | from=北京南, to=上海虹桥, passengers=2; must NOT ask passengers | PASS |
 | `2026-09-29 北京南到上海虹桥 08:00-10:00 二等座 两人` | from=北京南, to=上海虹桥, passengers=2; must NOT ask passengers | PASS |
-| `9月29日北京南→上海虹桥，上午8点到10点，二等，两张票` | from=北京南, to=上海虹桥, passengers=2; must NOT ask passengers | PASS |
+| `9月29日北京南→上海虹桥，上午8点到10点，二等，两张票` | from=北京南, to=上海虹桥, passengers=2; must NOT ask passengers (stations/pax OK). **grabStartAt invent = FAIL → see P1b** | PASS (stations/pax); FAIL (grab) → P1b |
 | `北京南到上海虹桥 2026-09-29 二等座 2张` | from=北京南, to=上海虹桥, passengers=2; must NOT ask passengers | PASS |
 | `2026-09-29假车站到另一个假站，二等座，两张` | invalid stations; no confirmation; no create | PASS |
 
-**Intent parsing acceptance (this P1 scope): COMPLETE — all required cases PASS**
+**Intent parsing acceptance (this P1 station/pax scope): COMPLETE for listed station/pax cases.**
+**P1_cn_date grabStartAt invent was a separate FAIL** — tracked and fixed under P1b; do not treat P1 as covering grab-start isolation.
 
 Full conversational intent parsing product acceptance remains broader than this P1 bugfix;
 do not declare overall intent-parsing acceptance complete beyond the cases listed here.
@@ -34,6 +35,6 @@ do not declare overall intent-parsing acceptance complete beyond the cases liste
 ```
 
 ## Remaining gaps
-- `grabStartAt` can still be inferred from bare `N点` when no year is present (e.g. 「上午8点到10点」 may set grab-start); prefer explicit 「现在」/datetime for start-watch.
+- ~~`grabStartAt` inferred from bare `N点`~~ → fixed in **P1b** (explicit 开抢/盯票/现在 only).
 - Allowlist is curated (~182 major stations), not full 12306 index; rare stations may need user to restate after index warm-up improvements.
-- Overall conversational intent-parsing product acceptance is broader than this P1 scope (multi-turn UX, flight airports, show edge cases).
+- Overall conversational intent-parsing product acceptance is broader than this P1 scope (multi-turn UX, flight airports, show edge cases) — **NOT complete**.

@@ -140,6 +140,10 @@ describe("P1 Chinese intake parsing", () => {
     assert.equal(r.session.fields.seatClass, "二等座");
     assert.ok(r.session.fields.date?.endsWith("-09-29"));
     assert.equal(r.session.fields.timeWindow, "08:00-10:00");
+    assert.equal(r.session.fields.grabStartAt, undefined);
+    assert.equal(r.readyForConfirm, false);
+    assert.equal(r.confirmation, undefined);
+    assert.equal(r.missing, "grabStartAt");
   });
 
   it("parses date after stations + 2张", () => {
@@ -187,5 +191,117 @@ describe("P1 Chinese intake parsing", () => {
     const r = processTurn(createEmptySession(), "只要北京南出发，二等座，两张");
     assert.equal(r.readyForConfirm, false);
     assert.ok(!r.confirmation);
+  });
+});
+
+describe("P1b grabStartAt vs travel timeWindow", () => {
+  const fixedNow = new Date("2026-09-22T04:00:00.000Z"); // Asia/Shanghai 12:00
+
+  it("failing sentence: timeWindow set, grabStartAt missing, ready=false", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "9月29日北京南→上海虹桥，上午8点到10点，二等，两张票",
+      fixedNow
+    );
+    assert.equal(r.session.fields.timeWindow, "08:00-10:00");
+    assert.equal(r.session.fields.grabStartAt, undefined);
+    assert.equal(r.readyForConfirm, false);
+    assert.equal(r.confirmation, undefined);
+    assert.equal(r.missing, "grabStartAt");
+    assert.ok(/盯票|抢票|开抢/.test(r.reply), r.reply);
+  });
+
+  it("上午8点到10点 alone is timeWindow, not grabStartAt", () => {
+    let s = createEmptySession();
+    let r = processTurn(s, "火车", fixedNow);
+    r = processTurn(r.session, "北京南到上海虹桥", fixedNow);
+    r = processTurn(r.session, "2026-09-29", fixedNow);
+    r = processTurn(r.session, "上午8点到10点", fixedNow);
+    assert.equal(r.session.fields.timeWindow, "08:00-10:00");
+    assert.equal(r.session.fields.grabStartAt, undefined);
+    assert.notEqual(r.missing, "grabStartAt"); // still need seat/pax before grab
+  });
+
+  it("明天8点开抢 sets future grabStartAt", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "北京南到上海虹桥 2026-09-29 08:00-10:00 二等座 两张 明天8点开抢",
+      fixedNow
+    );
+    assert.ok(r.session.fields.grabStartAt, "grabStartAt should be set");
+    const g = new Date(r.session.fields.grabStartAt!);
+    assert.ok(g.getTime() > fixedNow.getTime(), `expected future, got ${r.session.fields.grabStartAt}`);
+    // 2026-09-23 08:00 +08:00 = 2026-09-23T00:00:00.000Z
+    assert.equal(r.session.fields.grabStartAt, "2026-09-23T00:00:00.000Z");
+  });
+
+  it("9月29日8点出发 is travel, not grabStartAt", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "9月29日8点出发 北京南到上海虹桥 二等座 两张票",
+      fixedNow
+    );
+    assert.ok(r.session.fields.date?.endsWith("-09-29"));
+    assert.equal(r.session.fields.grabStartAt, undefined);
+    assert.equal(r.readyForConfirm, false);
+    // timeWindow should capture departure clock or daypart; at least not grab
+    assert.ok(
+      r.session.fields.timeWindow === "08:00" ||
+        r.session.fields.timeWindow === "06:00-12:00" ||
+        r.missing === "timeWindow" ||
+        r.missing === "grabStartAt" ||
+        r.missing === "seatClass" ||
+        r.missing === "passengers" ||
+        r.missing === "from" ||
+        r.missing === "to"
+    );
+    assert.ok(!r.confirmation);
+  });
+
+  it("bare 8点 with time window present must not invent grabStartAt", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "2026-09-29北京南到上海虹桥，上午8点到10点，二等座，两张",
+      fixedNow
+    );
+    assert.equal(r.session.fields.timeWindow, "08:00-10:00");
+    assert.equal(r.session.fields.grabStartAt, undefined);
+    assert.equal(r.readyForConfirm, false);
+  });
+
+  it("现在 sets grabStartAt ≈ now when other fields complete", () => {
+    let r = processTurn(
+      createEmptySession(),
+      "2026-09-29北京南到上海虹桥，08:00-10:00，二等座，两张",
+      fixedNow
+    );
+    assert.equal(r.missing, "grabStartAt");
+    r = processTurn(r.session, "现在", fixedNow);
+    assert.ok(r.session.fields.grabStartAt);
+    assert.equal(r.readyForConfirm, true);
+  });
+
+  it("立刻开抢 in free-form sets grabStartAt", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "北京南到上海虹桥 2026-09-29 08:00-10:00 二等座 2人 立刻开抢",
+      fixedNow
+    );
+    assert.ok(r.session.fields.grabStartAt);
+    assert.equal(r.readyForConfirm, true);
+  });
+
+  it("past grabStartAt short answer is rejected — ask again", () => {
+    let r = processTurn(
+      createEmptySession(),
+      "2026-09-29北京南到上海虹桥，08:00-10:00，二等座，两张",
+      fixedNow
+    );
+    assert.equal(r.missing, "grabStartAt");
+    // 今天 08:00 Shanghai while now is 12:00 Shanghai → past
+    r = processTurn(r.session, "今天8点", fixedNow);
+    assert.equal(r.session.fields.grabStartAt, undefined);
+    assert.equal(r.readyForConfirm, false);
+    assert.equal(r.missing, "grabStartAt");
   });
 });

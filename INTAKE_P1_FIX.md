@@ -1,5 +1,7 @@
 # INTAKE P1 FIX — measured live API
 
+> **P1b supersession:** Case `P1_cn_date` (`9月29日…上午8点到10点…`) was incorrectly marked PASS with `ready=True` / invented `grabStartAt`. That is a **FAIL** for grab-start isolation — fixed in P1b (see `ACCEPTANCE_INTAKE_P1B.md` / `INTAKE_P1B_FIX.md`).
+
 ## Root cause
 1. **Date glued to stations**: `extractFromTo` treated ASCII `-` / `—` as route separators, so `2026-09-29北京南到上海虹桥` matched `from="2026-09"` / `to="29北京南到上海虹桥"`.
 2. **Chinese passenger counts**: `两张` / `两张票` / `三张` / `一个人` were not mapped (only `2人` and `两人|两位`).
@@ -22,13 +24,13 @@
 
 ## Summary
 
-- All required cases: **PASS**
+- Station/passenger P1 cases: PASS for route/pax; **P1_cn_date wrongly marked PASS** — travel window「上午8点到10点」was invented as grabStartAt (see P1b).
 
 | Case | Kind | Result | from | to | passengers | missing | ready |
 |------|------|--------|------|----|------------|---------|-------|
 | P1_exact | pos | PASS | 北京南 | 上海虹桥 | 2 | grabStartAt | False |
 | P1_spaced | pos | PASS | 北京南 | 上海虹桥 | 2 | grabStartAt | False |
-| P1_cn_date | pos | PASS | 北京南 | 上海虹桥 | 2 | None | True |
+| P1_cn_date | pos | FAIL (P1b) | 北京南 | 上海虹桥 | 2 | should be grabStartAt | True (WRONG: invented grabStartAt) |
 | P1_date_after | pos | PASS | 北京南 | 上海虹桥 | 2 | timeWindow | False |
 | N_fake | neg | PASS | None | None |  | from | False |
 
