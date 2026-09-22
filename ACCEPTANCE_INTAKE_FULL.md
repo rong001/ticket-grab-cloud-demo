@@ -33,3 +33,7 @@ Missing fields / ambiguous city&airport / past grabStartAt / fake stations → *
 **整体对话入单验收: 通过**
 
 See also: `INTAKE_ACCEPTANCE_E2E.md` for redacted transcripts and HTTP evidence.
+
+## Commits
+- Public demo:  — https://github.com/rong001/ticket-grab-cloud-demo/commit/ce944545bbcd0356b2f80928cca8bb55dcbfb58c
+- Private:  — https://github.com/rong001/ticket-grab-cloud/commit/ff23040059cd4052a8d6477d7cbdd546b689f52a
