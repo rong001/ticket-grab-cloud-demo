@@ -300,8 +300,8 @@ Handles (redacted):
 **整体对话入单验收: 通过**
 
 ## Commits
-- Public demo (feat):  — https://github.com/rong001/ticket-grab-cloud-demo/commit/ce944545bbcd0356b2f80928cca8bb55dcbfb58c
-- Public demo (docs):  — https://github.com/rong001/ticket-grab-cloud-demo/commit/835d1f9e5f7adb50e696e08de14d7bd540e4cd98
-- Private (feat):  — https://github.com/rong001/ticket-grab-cloud/commit/b335bd5daaa0ecb2e93706acb08c160cccf779d9
-- Private (api wire):  — https://github.com/rong001/ticket-grab-cloud/commit/ff23040059cd4052a8d6477d7cbdd546b689f52a
-- Private (docs):  — https://github.com/rong001/ticket-grab-cloud/commit/fe6f698b396368f7d617adac0df1766a62f506d0
+- Public demo (feat): ce944545bbcd0356b2f80928cca8bb55dcbfb58c — https://github.com/rong001/ticket-grab-cloud-demo/commit/ce944545bbcd0356b2f80928cca8bb55dcbfb58c
+- Public demo (docs tip): 038657a080d3e219c854f8272b4b782f5df1edf3 — https://github.com/rong001/ticket-grab-cloud-demo/commit/038657a080d3e219c854f8272b4b782f5df1edf3
+- Private (feat): b335bd5daaa0ecb2e93706acb08c160cccf779d9 — https://github.com/rong001/ticket-grab-cloud/commit/b335bd5daaa0ecb2e93706acb08c160cccf779d9
+- Private (api wire): ff23040059cd4052a8d6477d7cbdd546b689f52a — https://github.com/rong001/ticket-grab-cloud/commit/ff23040059cd4052a8d6477d7cbdd546b689f52a
+- Private (docs tip): f5134015b8ad77576ca2c1ec19a8c92c0fdb2757 — https://github.com/rong001/ticket-grab-cloud/commit/f5134015b8ad77576ca2c1ec19a8c92c0fdb2757
