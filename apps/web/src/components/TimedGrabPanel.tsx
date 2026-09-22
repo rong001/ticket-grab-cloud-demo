@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { formatShanghaiDateTime } from "@/lib/format";
 import Link from "next/link";
 
 export type WatchJobRow = {
@@ -236,7 +237,7 @@ export default function TimedGrabPanel(props: Props) {
             </span>{" "}
             每 {primary.intervalMinutes} 分钟
             {primary.autoOrder ? " · 自动建单 ON" : " · 仅通知"}
-            {primary.endsAt ? ` · 至 ${new Date(primary.endsAt).toLocaleString()}` : ""}
+            {primary.endsAt ? ` · 至 ${formatShanghaiDateTime(primary.endsAt)}` : ""}
           </div>
           <div className="timed-grab-next">
             下次执行{" "}
@@ -248,7 +249,7 @@ export default function TimedGrabPanel(props: Props) {
                   : "即将执行"}
             </strong>
             {primary.nextRunAt && (
-              <span className="muted"> · {new Date(primary.nextRunAt).toLocaleString()}</span>
+              <span className="muted"> · {formatShanghaiDateTime(primary.nextRunAt)}</span>
             )}
           </div>
         </div>
@@ -276,9 +277,9 @@ export default function TimedGrabPanel(props: Props) {
                     ? ` · 票档 ${j.preferences.preferredTiers.join(",")}`
                     : ""}
                   <div className="meta">
-                    {j.startsAt ? `起 ${new Date(j.startsAt).toLocaleString()} · ` : ""}
-                    {j.nextRunAt ? `下次 ${new Date(j.nextRunAt).toLocaleString()}` : ""}
-                    {j.lastRunAt ? ` · 上次 ${new Date(j.lastRunAt).toLocaleString()}` : ""}
+                    {j.startsAt ? `起 ${formatShanghaiDateTime(j.startsAt)} · ` : ""}
+                    {j.nextRunAt ? `下次 ${formatShanghaiDateTime(j.nextRunAt)}` : ""}
+                    {j.lastRunAt ? ` · 上次 ${formatShanghaiDateTime(j.lastRunAt)}` : ""}
                   </div>
                 </div>
                 {(j.status === "active" || j.status === "pending") && props.onCancel && (

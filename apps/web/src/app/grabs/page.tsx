@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, getToken } from "@/lib/api";
-import { formatFields } from "@/lib/format";
+import { formatShanghaiDateTime,  formatFields } from "@/lib/format";
 
 type GrabItem = {
   id: string;
@@ -172,9 +172,9 @@ export default function GrabsPage() {
                 </div>
                 <p className="meta" style={{ margin: "0.5rem 0 0" }}>
                   间隔 {j.intervalMinutes} 分钟
-                  {j.startsAt ? ` · 开始 ${new Date(j.startsAt).toLocaleString()}` : ""}
-                  {j.nextRunAt ? ` · 下次 ${countdown(j.nextRunAt)}（${new Date(j.nextRunAt).toLocaleString()}）` : ""}
-                  {j.endsAt ? ` · 至 ${new Date(j.endsAt).toLocaleString()}` : ""}
+                  {j.startsAt ? ` · 开始 ${formatShanghaiDateTime(j.startsAt)}` : ""}
+                  {j.nextRunAt ? ` · 下次 ${countdown(j.nextRunAt)}（${formatShanghaiDateTime(j.nextRunAt)}）` : ""}
+                  {j.endsAt ? ` · 至 ${formatShanghaiDateTime(j.endsAt)}` : ""}
                   {j.statusReason ? ` · ${j.statusReason}` : ""}
                 </p>
               </div>

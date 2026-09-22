@@ -409,3 +409,121 @@ describe("flight multi-turn + airport disambiguation", () => {
     assert.equal(r.missing, "grabStartAt");
   });
 });
+
+describe("P1c dual-date grabStartAt + 时间不限 seat + Shanghai display", () => {
+  const fixedNow = new Date("2026-09-22T04:00:00.000Z"); // Asia/Shanghai 12:00
+
+  it("exact failing sentence: Nov 20 09:00 Shanghai grab, seat 二等座, window 不限", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "2026-12-15韶关东到虎门，时间不限，二等座，一张，2026-11-20 09:00开始盯票",
+      fixedNow
+    );
+    assert.equal(r.session.fields.channel, "train");
+    assert.equal(r.session.fields.from, "韶关东");
+    assert.equal(r.session.fields.to, "虎门");
+    assert.equal(r.session.fields.date, "2026-12-15");
+    assert.equal(r.session.fields.timeWindow, "不限");
+    assert.equal(r.session.fields.seatClass, "二等座");
+    assert.equal(r.session.fields.passengers, 1);
+    assert.equal(r.session.fields.grabStartAt, "2026-11-20T01:00:00.000Z");
+    assert.equal(r.readyForConfirm, true);
+    assert.ok(r.confirmation);
+    const grabLine = r.confirmation!.lines.find((l) => l.label === "盯票开始");
+    assert.ok(grabLine, "missing 盯票开始 line");
+    assert.match(grabLine!.value, /2026-11-20 09:00/);
+    assert.doesNotMatch(grabLine!.value, /2026\/9\/23|2026-09-23/);
+    assert.ok(!grabLine!.value.includes("01:00") || grabLine!.value.includes("+08:00"));
+    const seatLine = r.confirmation!.lines.find((l) => l.label === "席别");
+    assert.equal(seatLine?.value, "二等座");
+  });
+
+  it("11月20日9点开始盯票 with travel date", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "2026-12-15韶关东到虎门，时间不限，二等座，一张，11月20日9点开始盯票",
+      fixedNow
+    );
+    assert.equal(r.session.fields.date, "2026-12-15");
+    assert.equal(r.session.fields.seatClass, "二等座");
+    assert.equal(r.session.fields.timeWindow, "不限");
+    assert.equal(r.session.fields.grabStartAt, "2026-11-20T01:00:00.000Z");
+    assert.equal(r.readyForConfirm, true);
+    const grabLine = r.confirmation!.lines.find((l) => l.label === "盯票开始");
+    assert.match(grabLine!.value, /2026-11-20 09:00/);
+  });
+
+  it("明天9点开始盯票 alone → tomorrow Shanghai 09:00", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "韶关东到虎门 2026-12-15 时间不限 二等座 一张 明天9点开始盯票",
+      fixedNow
+    );
+    // travel date present; 明天 refers to grab (not travel date, not invent from unbound clock)
+    assert.equal(r.session.fields.date, "2026-12-15");
+    assert.equal(r.session.fields.timeWindow, "不限");
+    assert.equal(r.session.fields.seatClass, "二等座");
+    assert.equal(r.session.fields.grabStartAt, "2026-09-23T01:00:00.000Z");
+    assert.equal(r.readyForConfirm, true);
+    const grabLine = r.confirmation!.lines.find((l) => l.label === "盯票开始");
+    assert.match(grabLine!.value, /2026-09-23 09:00/);
+  });
+
+  it("明天9点开始盯票 without travel fields still parses grab relative", () => {
+    let r = processTurn(createEmptySession(), "火车", fixedNow);
+    r = processTurn(r.session, "韶关东到虎门", fixedNow);
+    r = processTurn(r.session, "2026-12-15", fixedNow);
+    r = processTurn(r.session, "不限", fixedNow);
+    r = processTurn(r.session, "二等座", fixedNow);
+    r = processTurn(r.session, "1", fixedNow);
+    r = processTurn(r.session, "明天9点开始盯票", fixedNow);
+    assert.equal(r.session.fields.grabStartAt, "2026-09-23T01:00:00.000Z");
+    assert.equal(r.readyForConfirm, true);
+  });
+
+  it("explicit calendar grab wins over 明天 in same utterance", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "2026-12-15韶关东到虎门，二等座，一张，明天随便看看，2026-11-20 09:00开始盯票",
+      fixedNow
+    );
+    assert.equal(r.session.fields.grabStartAt, "2026-11-20T01:00:00.000Z");
+  });
+
+  it("时间不限 + 二等座 → window 不限, seat 二等座", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "北京南到上海虹桥 2026-12-01 时间不限 二等座 1张 现在开始盯票",
+      fixedNow
+    );
+    assert.equal(r.session.fields.timeWindow, "不限");
+    assert.equal(r.session.fields.seatClass, "二等座");
+    assert.notEqual(r.session.fields.seatClass, "不限");
+    assert.ok(r.session.fields.grabStartAt);
+    assert.equal(r.readyForConfirm, true);
+  });
+
+  it("ambiguous/unparseable grab with intent → no confirm", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "韶关东到虎门 2026-12-15 时间不限 二等座 一张 尽快开始盯票",
+      fixedNow
+    );
+    // 尽快 is not a reliable datetime
+    assert.equal(r.session.fields.grabStartAt, undefined);
+    assert.equal(r.readyForConfirm, false);
+    assert.equal(r.missing, "grabStartAt");
+    assert.equal(r.confirmation, undefined);
+  });
+
+  it("past explicit grabStartAt → no confirm", () => {
+    const r = processTurn(
+      createEmptySession(),
+      "韶关东到虎门 2026-12-15 时间不限 二等座 一张 2026-01-01 09:00开始盯票",
+      fixedNow
+    );
+    assert.equal(r.session.fields.grabStartAt, undefined);
+    assert.equal(r.readyForConfirm, false);
+    assert.equal(r.missing, "grabStartAt");
+  });
+});

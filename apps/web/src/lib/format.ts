@@ -32,3 +32,24 @@ export function formatFieldsInline(fields: Record<string, unknown> | null | unde
     .map((f) => `${f.label} ${f.value}`)
     .join(" · ");
 }
+
+
+/** Asia/Shanghai wall-clock for grab starts / next runs (never raw UTC as local). */
+export function formatShanghaiDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return iso;
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = Object.fromEntries(
+    fmt.formatToParts(d).filter((x) => x.type !== "literal").map((x) => [x.type, x.value])
+  );
+  const hh = parts.hour === "24" ? "00" : parts.hour;
+  return `${parts.year}-${parts.month}-${parts.day} ${hh}:${parts.minute} +08:00`;
+}

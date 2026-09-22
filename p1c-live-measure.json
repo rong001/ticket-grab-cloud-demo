@@ -1,0 +1,296 @@
+{
+  "P1c_exact": {
+    "request": {
+      "message": "2026-12-15韶关东到虎门，时间不限，二等座，一张，2026-11-20 09:00开始盯票"
+    },
+    "fields": {
+      "channel": "train",
+      "from": "韶关东",
+      "to": "虎门",
+      "date": "2026-12-15",
+      "timeWindow": "不限",
+      "seatClass": "二等座",
+      "passengers": 1,
+      "grabStartAt": "2026-11-20T01:00:00.000Z"
+    },
+    "missing": null,
+    "readyForConfirm": true,
+    "confirmation": {
+      "lines": [
+        {
+          "label": "出发",
+          "value": "韶关东"
+        },
+        {
+          "label": "到达",
+          "value": "虎门"
+        },
+        {
+          "label": "日期",
+          "value": "2026-12-15"
+        },
+        {
+          "label": "时间段",
+          "value": "不限"
+        },
+        {
+          "label": "席别",
+          "value": "二等座"
+        },
+        {
+          "label": "人数",
+          "value": "1"
+        },
+        {
+          "label": "盯票开始",
+          "value": "2026-11-20 09:00 +08:00"
+        }
+      ],
+      "fields": {
+        "channel": "train",
+        "from": "韶关东",
+        "to": "虎门",
+        "date": "2026-12-15",
+        "timeWindow": "不限",
+        "seatClass": "二等座",
+        "passengers": 1,
+        "grabStartAt": "2026-11-20T01:00:00.000Z"
+      }
+    },
+    "reply_snip": "已收集齐全，请确认：\n· 出发：韶关东\n· 到达：虎门\n· 日期：2026-12-15\n· 时间段：不限\n· 席别：二等座\n· 人数：1\n· 盯票开始：2026-11-20 09:00 +08:00\n\n将创建「监控盯票」任务：定时查询 12306 公开余票并通知。不含官方授权的无人值守占座/购票。\n确认后才会创建盯票任务。请点击确认，或回复「确认」。"
+  },
+  "P1c_md": {
+    "request": {
+      "message": "2026-12-15韶关东到虎门，时间不限，二等座，一张，11月20日9点开始盯票"
+    },
+    "fields": {
+      "channel": "train",
+      "from": "韶关东",
+      "to": "虎门",
+      "date": "2026-12-15",
+      "timeWindow": "不限",
+      "seatClass": "二等座",
+      "passengers": 1,
+      "grabStartAt": "2026-11-20T01:00:00.000Z"
+    },
+    "missing": null,
+    "readyForConfirm": true,
+    "confirmation": {
+      "lines": [
+        {
+          "label": "出发",
+          "value": "韶关东"
+        },
+        {
+          "label": "到达",
+          "value": "虎门"
+        },
+        {
+          "label": "日期",
+          "value": "2026-12-15"
+        },
+        {
+          "label": "时间段",
+          "value": "不限"
+        },
+        {
+          "label": "席别",
+          "value": "二等座"
+        },
+        {
+          "label": "人数",
+          "value": "1"
+        },
+        {
+          "label": "盯票开始",
+          "value": "2026-11-20 09:00 +08:00"
+        }
+      ],
+      "fields": {
+        "channel": "train",
+        "from": "韶关东",
+        "to": "虎门",
+        "date": "2026-12-15",
+        "timeWindow": "不限",
+        "seatClass": "二等座",
+        "passengers": 1,
+        "grabStartAt": "2026-11-20T01:00:00.000Z"
+      }
+    },
+    "reply_snip": "已收集齐全，请确认：\n· 出发：韶关东\n· 到达：虎门\n· 日期：2026-12-15\n· 时间段：不限\n· 席别：二等座\n· 人数：1\n· 盯票开始：2026-11-20 09:00 +08:00\n\n将创建「监控盯票」任务：定时查询 12306 公开余票并通知。不含官方授权的无人值守占座/购票。\n确认后才会创建盯票任务。请点击确认，或回复「确认」。"
+  },
+  "P1c_tomorrow_with_travel": {
+    "request": {
+      "message": "韶关东到虎门 2026-12-15 时间不限 二等座 一张 明天9点开始盯票"
+    },
+    "fields": {
+      "channel": "train",
+      "from": "韶关东",
+      "to": "虎门",
+      "date": "2026-12-15",
+      "timeWindow": "不限",
+      "seatClass": "二等座",
+      "passengers": 1,
+      "grabStartAt": "2026-09-23T01:00:00.000Z"
+    },
+    "missing": null,
+    "readyForConfirm": true,
+    "confirmation": {
+      "lines": [
+        {
+          "label": "出发",
+          "value": "韶关东"
+        },
+        {
+          "label": "到达",
+          "value": "虎门"
+        },
+        {
+          "label": "日期",
+          "value": "2026-12-15"
+        },
+        {
+          "label": "时间段",
+          "value": "不限"
+        },
+        {
+          "label": "席别",
+          "value": "二等座"
+        },
+        {
+          "label": "人数",
+          "value": "1"
+        },
+        {
+          "label": "盯票开始",
+          "value": "2026-09-23 09:00 +08:00"
+        }
+      ],
+      "fields": {
+        "channel": "train",
+        "from": "韶关东",
+        "to": "虎门",
+        "date": "2026-12-15",
+        "timeWindow": "不限",
+        "seatClass": "二等座",
+        "passengers": 1,
+        "grabStartAt": "2026-09-23T01:00:00.000Z"
+      }
+    },
+    "reply_snip": "已收集齐全，请确认：\n· 出发：韶关东\n· 到达：虎门\n· 日期：2026-12-15\n· 时间段：不限\n· 席别：二等座\n· 人数：1\n· 盯票开始：2026-09-23 09:00 +08:00\n\n将创建「监控盯票」任务：定时查询 12306 公开余票并通知。不含官方授权的无人值守占座/购票。\n确认后才会创建盯票任务。请点击确认，或回复「确认」。"
+  },
+  "P1c_time_seat": {
+    "request": {
+      "message": "北京南到上海虹桥 2026-12-01 时间不限 二等座 1张 现在开始盯票"
+    },
+    "fields": {
+      "channel": "train",
+      "from": "北京南",
+      "to": "上海虹桥",
+      "date": "2026-12-01",
+      "timeWindow": "不限",
+      "seatClass": "二等座",
+      "passengers": 1,
+      "grabStartAt": "2026-09-22T05:26:44.775Z"
+    },
+    "missing": null,
+    "readyForConfirm": true,
+    "confirmation": {
+      "lines": [
+        {
+          "label": "出发",
+          "value": "北京南"
+        },
+        {
+          "label": "到达",
+          "value": "上海虹桥"
+        },
+        {
+          "label": "日期",
+          "value": "2026-12-01"
+        },
+        {
+          "label": "时间段",
+          "value": "不限"
+        },
+        {
+          "label": "席别",
+          "value": "二等座"
+        },
+        {
+          "label": "人数",
+          "value": "1"
+        },
+        {
+          "label": "盯票开始",
+          "value": "2026-09-22 13:26 +08:00"
+        }
+      ],
+      "fields": {
+        "channel": "train",
+        "from": "北京南",
+        "to": "上海虹桥",
+        "date": "2026-12-01",
+        "timeWindow": "不限",
+        "seatClass": "二等座",
+        "passengers": 1,
+        "grabStartAt": "2026-09-22T05:26:44.775Z"
+      }
+    },
+    "reply_snip": "已收集齐全，请确认：\n· 出发：北京南\n· 到达：上海虹桥\n· 日期：2026-12-01\n· 时间段：不限\n· 席别：二等座\n· 人数：1\n· 盯票开始：2026-09-22 13:26 +08:00\n\n将创建「监控盯票」任务：定时查询 12306 公开余票并通知。不含官方授权的无人值守占座/购票。\n确认后才会创建盯票任务。请点击确认，或回复「确认」。"
+  },
+  "P1c_ambiguous": {
+    "request": {
+      "message": "韶关东到虎门 2026-12-15 时间不限 二等座 一张 尽快开始盯票"
+    },
+    "fields": {
+      "channel": "train",
+      "from": "韶关东",
+      "to": "虎门",
+      "date": "2026-12-15",
+      "timeWindow": "不限",
+      "seatClass": "二等座",
+      "passengers": 1
+    },
+    "missing": "grabStartAt",
+    "readyForConfirm": false,
+    "confirmation": null,
+    "reply_snip": "何时开始盯票/开抢/开售监控？（例如「现在」「今晚20:00」「2026-10-01 09:00」）。"
+  },
+  "P1c_past": {
+    "request": {
+      "message": "韶关东到虎门 2026-12-15 时间不限 二等座 一张 2026-01-01 09:00开始盯票"
+    },
+    "fields": {
+      "channel": "train",
+      "from": "韶关东",
+      "to": "虎门",
+      "date": "2026-12-15",
+      "timeWindow": "不限",
+      "seatClass": "二等座",
+      "passengers": 1
+    },
+    "missing": "grabStartAt",
+    "readyForConfirm": false,
+    "confirmation": null,
+    "reply_snip": "何时开始盯票/开抢/开售监控？（例如「现在」「今晚20:00」「2026-10-01 09:00」）。"
+  },
+  "P1b_regress": {
+    "request": {
+      "message": "9月29日北京南→上海虹桥，上午8点到10点，二等，两张票"
+    },
+    "fields": {
+      "channel": "train",
+      "from": "北京南",
+      "to": "上海虹桥",
+      "date": "2026-09-29",
+      "timeWindow": "08:00-10:00",
+      "seatClass": "二等座",
+      "passengers": 2
+    },
+    "missing": "grabStartAt",
+    "readyForConfirm": false,
+    "confirmation": null,
+    "reply_snip": "何时开始盯票/开抢/开售监控？（例如「现在」「今晚20:00」「2026-10-01 09:00」）。"
+  }
+}

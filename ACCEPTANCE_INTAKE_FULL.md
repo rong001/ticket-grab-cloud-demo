@@ -30,7 +30,9 @@ Conversational intake acceptance across **train / show / flight**.
 Missing fields / ambiguous city&airport / past grabStartAt / fake stations → **PASS** (ask, no confirm)
 
 ## Overall
-**整体对话入单验收: 通过**
+**整体对话入单验收: 通过**（re-evaluated after P1c; see `ACCEPTANCE_INTAKE_P1C.md`）
+
+> Note: Prior PASS was **retracted** while P1c (dual-date grabStartAt / Shanghai display / 时间不限 seat clobber) was open; restored only after P1c live+E2E PASS.
 
 See also: `INTAKE_ACCEPTANCE_E2E.md` for redacted transcripts and HTTP evidence.
 
