@@ -1,48 +1,52 @@
 {
-    "providerMode": "live",
-    "queriedAt": "2026-09-22T07:13:06.928Z",
-    "channels": [
-        {
-            "channel": "train",
-            "mode": "live",
-            "liveConfigured": true,
-            "inventoryLive": true,
-            "scheduleLive": true,
-            "fareMonitor": false,
-            "badge": "live",
-            "labelZh": "\u5b9e\u65f6",
-            "provider": "train12306",
-            "notes": "12306 public left-ticket query (kyfw.12306.cn)"
-        },
-        {
-            "channel": "show",
-            "mode": "live",
-            "liveConfigured": true,
-            "inventoryLive": true,
-            "scheduleLive": true,
-            "fareMonitor": false,
-            "badge": "live",
-            "labelZh": "\u5b9e\u65f6",
-            "provider": "show",
-            "notes": "Dianping/Gewara myshow public detail+shows+tickets (\u5b9e\u65f6\u573a\u6b21); optional SHOW_PUBLIC_API_URL override. Not Damai login APIs."
-        },
-        {
-            "channel": "flight",
-            "mode": "fixture",
-            "liveConfigured": true,
-            "inventoryLive": false,
-            "scheduleLive": true,
-            "fareMonitor": false,
-            "badge": "unavailable",
-            "labelZh": "\u5b9e\u65f6\u53ef\u552e\u7968/\u7968\u4ef7\u76d1\u63a7\u4e0d\u53ef\u7528",
-            "provider": "opensky",
-            "notes": "OpenSky Network ADS-B only (no fares, no bookable inventory). \u300c\u5b9e\u65f6\u53ef\u552e\u7968/\u7968\u4ef7\u76d1\u63a7\u4e0d\u53ef\u7528\u300d. Set AMADEUS_CLIENT_ID+SECRET for inventory; FLIGHT_OPENSKY=0 to disable ADS-B fallback."
-        }
-    ],
-    "strictLive": false,
-    "flightInventoryLive": false,
-    "flightScheduleLive": true,
-    "flightFareMonitor": false,
-    "flightLabelZh": "\u5b9e\u65f6\u53ef\u552e\u7968/\u7968\u4ef7\u76d1\u63a7\u4e0d\u53ef\u7528",
-    "flightNotes": "OpenSky Network ADS-B only (no fares, no bookable inventory). \u300c\u5b9e\u65f6\u53ef\u552e\u7968/\u7968\u4ef7\u76d1\u63a7\u4e0d\u53ef\u7528\u300d. Set AMADEUS_CLIENT_ID+SECRET for inventory; FLIGHT_OPENSKY=0 to disable ADS-B fallback."
+  "providerMode": "live",
+  "queriedAt": "2026-09-22T07:24:22.782Z",
+  "channels": [
+    {
+      "channel": "train",
+      "mode": "live",
+      "liveConfigured": true,
+      "inventoryLive": true,
+      "scheduleConfigured": true,
+      "scheduleLive": true,
+      "fareMonitor": false,
+      "badge": "live",
+      "labelZh": "实时",
+      "provider": "train12306",
+      "notes": "12306 public left-ticket query (kyfw.12306.cn)"
+    },
+    {
+      "channel": "show",
+      "mode": "live",
+      "liveConfigured": true,
+      "inventoryLive": true,
+      "scheduleConfigured": true,
+      "scheduleLive": true,
+      "fareMonitor": false,
+      "badge": "live",
+      "labelZh": "实时",
+      "provider": "show",
+      "notes": "Dianping/Gewara myshow public detail+shows+tickets (实时场次); optional SHOW_PUBLIC_API_URL override. Not Damai login APIs."
+    },
+    {
+      "channel": "flight",
+      "mode": "fixture",
+      "liveConfigured": true,
+      "inventoryLive": false,
+      "scheduleConfigured": true,
+      "scheduleLive": false,
+      "fareMonitor": false,
+      "badge": "unavailable",
+      "labelZh": "实时可售票/票价监控不可用",
+      "provider": "opensky",
+      "notes": "OpenSky Network ADS-B only (no fares, no bookable inventory). 「实时可售票/票价监控不可用」. flightScheduleConfigured=true means ADS-B is enabled; flightScheduleLive is last successful fetch only (429/404 → false). Set AMADEUS_CLIENT_ID+SECRET for inventory; FLIGHT_OPENSKY=0 to disable ADS-B fallback."
+    }
+  ],
+  "strictLive": false,
+  "flightInventoryLive": false,
+  "flightScheduleConfigured": true,
+  "flightScheduleLive": false,
+  "flightFareMonitor": false,
+  "flightLabelZh": "实时可售票/票价监控不可用",
+  "flightNotes": "OpenSky Network ADS-B only (no fares, no bookable inventory). 「实时可售票/票价监控不可用」. flightScheduleConfigured=true means ADS-B is enabled; flightScheduleLive is last successful fetch only (429/404 → false). Set AMADEUS_CLIENT_ID+SECRET for inventory; FLIGHT_OPENSKY=0 to disable ADS-B fallback."
 }

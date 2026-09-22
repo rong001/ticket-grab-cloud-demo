@@ -1,0 +1,14 @@
+{
+  "channel": "flight",
+  "provider": "flight",
+  "mode": "fixture",
+  "items": [],
+  "liveOk": false,
+  "scheduleConfigured": true,
+  "scheduleLive": false,
+  "inventoryLive": false,
+  "fareMonitor": false,
+  "notes": "实时源暂不可用：opensky: HTTP 429",
+  "queriedAt": "2026-09-22T07:24:24.237Z",
+  "disclaimer": "Public left-ticket / catalog query only. providerMode=live is not an authorized auto-buy or third-party sales license. Pay on official sites."
+}

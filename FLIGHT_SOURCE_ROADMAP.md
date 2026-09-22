@@ -10,6 +10,8 @@ Health/meta must **not** claim `scheduleLive=true` from config alone. Public sea
 
 Overall product remains **未通过** until an authorized inventory+fare source is live with inventory `liveOk=true`.
 
+**Public demo SHA (scheduleConfigured/Live split):** `29279d57756ea07000fee751046c3262162b1d59`
+
 ---
 
 ## 1. Formal integration checklist
