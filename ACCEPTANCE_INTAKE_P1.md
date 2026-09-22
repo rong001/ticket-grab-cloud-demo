@@ -32,3 +32,8 @@ do not declare overall intent-parsing acceptance complete beyond the cases liste
   "passengers": 2
 }
 ```
+
+## Remaining gaps
+- `grabStartAt` can still be inferred from bare `N点` when no year is present (e.g. 「上午8点到10点」 may set grab-start); prefer explicit 「现在」/datetime for start-watch.
+- Allowlist is curated (~182 major stations), not full 12306 index; rare stations may need user to restate after index warm-up improvements.
+- Overall conversational intent-parsing product acceptance is broader than this P1 scope (multi-turn UX, flight airports, show edge cases).

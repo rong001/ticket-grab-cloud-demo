@@ -1,6 +1,24 @@
 # INTAKE P1 FIX — measured live API
 
-Host: https://159.75.71.192:18444
+## Root cause
+1. **Date glued to stations**: `extractFromTo` treated ASCII `-` / `—` as route separators, so `2026-09-29北京南到上海虹桥` matched `from="2026-09"` / `to="29北京南到上海虹桥"`.
+2. **Chinese passenger counts**: `两张` / `两张票` / `三张` / `一个人` were not mapped (only `2人` and `两人|两位`).
+3. **No station allowlist**: garbage/fake tokens could populate `from`/`to` and later reach confirmation.
+
+## Fix summary
+- Strip temporal tokens (`YYYY-MM-DD`, `YYYY/MM/DD`, `YYYY.MM.DD`, `N月N日`, `YYYY年N月N日`) before route extraction.
+- Route separators limited to `到|去|至|→|->` (hyphen only when both sides are pure Chinese).
+- Passenger extractor: digits + 一..十/两 + 人|位|张|名(+票); `一个人`/`两张` etc.
+- `from`/`to` must be in curated known-station allowlist (`knownStations.ts`); invalid → keep asking, no confirmation card.
+- Unit tests for positive synonyms + fake-station negatives.
+
+## Commits
+- Public demo: `36b57c861ba234e7a9dc75ca153ec41880bd4e37` — https://github.com/rong001/ticket-grab-cloud-demo/commit/36b57c861ba234e7a9dc75ca153ec41880bd4e37
+- Private: `ae6d6dd8c4c8ed67ddf65e409a21b547fe50d586` — https://github.com/rong001/ticket-grab-cloud/commit/ae6d6dd8c4c8ed67ddf65e409a21b547fe50d586
+
+## Deploy
+- Rebuilt & restarted `ticket-grab-cloud` api+worker on 159.75.71.192; a-commerce-os / :80 / :443 untouched.
+- Live: https://159.75.71.192:18444
 
 ## Summary
 
