@@ -312,7 +312,7 @@ export default function GrabsPage() {
                     查看
                   </button>
                 </Link>
-                {(ch === "train" || ch === "show") && (j.travelerIds?.length ?? 0) > 0 && (
+                {(ch === "train" || ch === "show" || ch === "flight") && (j.travelerIds?.length ?? 0) > 0 && (
                   <button
                     type="button"
                     className="btn-query"
@@ -321,10 +321,16 @@ export default function GrabsPage() {
                     title={
                       ch === "show"
                         ? "使用本任务已绑定的观演人 + 最新短名单创建草稿订单（不提交、不扣款、不谎报已支付）"
-                        : "使用本任务已绑定的乘车人 + 最新短名单创建草稿订单（不提交、不扣款）"
+                        : ch === "flight"
+                          ? "使用本任务已绑定的乘机人 + 最新短名单创建草稿订单（不提交、不扣款、不谎报已支付；无运价库存时提交将待接入）"
+                          : "使用本任务已绑定的乘车人 + 最新短名单创建草稿订单（不提交、不扣款）"
                     }
                   >
-                    {ch === "show" ? "用已选观演人创建草稿订单" : "用已选乘客创建草稿订单"}
+                    {ch === "show"
+                      ? "用已选观演人创建草稿订单"
+                      : ch === "flight"
+                        ? "用已选乘机人创建草稿订单"
+                        : "用已选乘客创建草稿订单"}
                   </button>
                 )}
                 {live && (

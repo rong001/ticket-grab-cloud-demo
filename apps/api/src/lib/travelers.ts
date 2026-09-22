@@ -27,13 +27,13 @@ export async function resolveTravelerIdsForUser(opts: {
     select: { id: true },
   });
   if (rows.length !== ids.length) {
-    return { ok: false, error: "部分出行人/观演人不存在或不属于当前用户", status: 400 };
+    return { ok: false, error: "部分出行人/观演人/乘机人不存在或不属于当前用户", status: 400 };
   }
 
   if (opts.passengers != null && opts.passengers > 0 && ids.length !== opts.passengers) {
     return {
       ok: false,
-      error: `出行人/观演人数量（${ids.length}）与人数（${opts.passengers}）不一致`,
+      error: `出行人/观演人/乘机人数量（${ids.length}）与人数（${opts.passengers}）不一致`,
       status: 400,
     };
   }

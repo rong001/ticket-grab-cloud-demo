@@ -41,7 +41,7 @@ export async function travelerRoutes(app: FastifyInstance) {
     if (!idCheck.ok) return reply.code(400).send({ error: idCheck.error });
 
     if (body.relationship === "authorized" && body.authorizedConsent !== true) {
-      return reply.code(400).send({ error: "代购出行人/观演人须勾选授权同意" });
+      return reply.code(400).send({ error: "代购出行人/观演人/乘机人须勾选授权同意" });
     }
 
     const consentAt =
@@ -95,7 +95,7 @@ export async function travelerRoutes(app: FastifyInstance) {
         ? body.authorizedConsent === true
         : existing.authorizedConsent;
     if (nextRelationship === "authorized" && nextConsent !== true) {
-      return reply.code(400).send({ error: "代购出行人/观演人须勾选授权同意" });
+      return reply.code(400).send({ error: "代购出行人/观演人/乘机人须勾选授权同意" });
     }
 
     const data: Record<string, unknown> = {};

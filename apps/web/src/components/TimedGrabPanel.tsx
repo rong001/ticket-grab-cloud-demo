@@ -92,6 +92,7 @@ function useNow(tickMs = 1000) {
 export default function TimedGrabPanel(props: Props) {
   const isShow = props.channel === "show";
   const isTrain = props.channel === "train";
+  const isFlight = props.channel === "flight";
   const now = useNow();
   const activeJobs = useMemo(
     () => props.jobs.filter((j) => LIVE_WATCH_STATUSES.has(j.status)),
@@ -200,7 +201,7 @@ export default function TimedGrabPanel(props: Props) {
 
         {props.travelerOptions && props.onToggleTraveler && (
           <div>
-            <label>绑定乘车人 / 观演人（可选，多选）</label>
+            <label>绑定乘车人 / 观演人 / 乘机人（可选，多选）</label>
             {!props.travelerOptions.length ? (
               <p className="muted" style={{ margin: "0.25rem 0" }}>
                 暂无已保存人员 — <Link href="/travelers">去添加</Link>
@@ -273,7 +274,7 @@ export default function TimedGrabPanel(props: Props) {
         )}
         <Link href="/travelers">
           <button type="button" className="ghost">
-            {isShow ? "观演人" : "乘车人"}
+            {isShow ? "观演人" : isFlight ? "乘机人" : "乘车人"}
           </button>
         </Link>
       </div>
@@ -326,7 +327,7 @@ export default function TimedGrabPanel(props: Props) {
                     ? ` · 票档 ${j.preferences.preferredTiers.join(",")}`
                     : ""}
                   {j.travelers?.length
-                    ? ` · ${isShow ? "观演人" : "乘客"} ${j.travelers.map((t) => t.name).join("、")}`
+                    ? ` · ${isShow ? "观演人" : isFlight ? "乘机人" : "乘客"} ${j.travelers.map((t) => t.name).join("、")}`
                     : j.travelerIds?.length
                       ? ` · ${j.travelerIds.length} 人`
                       : ""}
@@ -337,7 +338,7 @@ export default function TimedGrabPanel(props: Props) {
                   </div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-                  {(isTrain || isShow) && (j.travelerIds?.length ?? j.travelers?.length ?? 0) > 0 && props.onCreateDraftOrder && (
+                  {(isTrain || isShow || isFlight) && (j.travelerIds?.length ?? j.travelers?.length ?? 0) > 0 && props.onCreateDraftOrder && (
                     <button
                       type="button"
                       className="btn-query"
@@ -346,10 +347,16 @@ export default function TimedGrabPanel(props: Props) {
                       title={
                         isShow
                           ? "用已选观演人创建草稿订单（不提交、不扣款、不谎报已支付）"
-                          : "用已选乘客创建草稿订单（不提交、不扣款）"
+                          : isFlight
+                            ? "用已选乘机人创建草稿订单（不提交、不扣款、不谎报已支付；无运价库存时提交将待接入）"
+                            : "用已选乘客创建草稿订单（不提交、不扣款）"
                       }
                     >
-                      {isShow ? "用已选观演人创建草稿订单" : "用已选乘客创建草稿订单"}
+                      {isShow
+                        ? "用已选观演人创建草稿订单"
+                        : isFlight
+                          ? "用已选乘机人创建草稿订单"
+                          : "用已选乘客创建草稿订单"}
                     </button>
                   )}
                   {LIVE_WATCH_STATUSES.has(j.status) && props.onPause && (

@@ -13,6 +13,8 @@ import {
   trainRealSubmitDisabledNextSteps,
   trainRealSubmitEnabled,
   showAutoBuyUnavailableNextSteps,
+  flightInventoryUnavailableNextSteps,
+  resolveBookingFlags,
 } from "../lib/bookingFlags.js";
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../lib/auth.js";
@@ -78,7 +80,11 @@ function pickShortlistItem(
     });
     if (filtered.length) pool = filtered;
   }
-  return pool[0] ?? null;
+  
+  // Prefer sellable/inventory-looking items; scheduleOnly (OpenSky/Aviationstack) is last resort for draft UX.
+  const nonSchedule = pool.filter((i) => (i.meta as { scheduleOnly?: boolean } | undefined)?.scheduleOnly !== true);
+  if (nonSchedule.length) pool = nonSchedule;
+return pool[0] ?? null;
 }
 
 export async function requestRoutes(app: FastifyInstance) {
@@ -791,6 +797,10 @@ export async function requestRoutes(app: FastifyInstance) {
         : channel === "flight"
           ? `航班与${personLabel}`
           : `车次与${personLabel}`;
+    const bookingFlags = resolveBookingFlags();
+    const scheduleOnly =
+      (item.meta as { scheduleOnly?: boolean } | undefined)?.scheduleOnly === true;
+    const flightInventoryLive = bookingFlags.flightInventoryLive === true;
     const nextSteps =
       channel === "show"
         ? [
@@ -802,15 +812,26 @@ export async function requestRoutes(app: FastifyInstance) {
             ),
             "本接口只创建草稿订单，不会自动提交或扣款，不会谎报已支付",
           ]
-        : [
-            `打开订单页 /orders/${existing?.id ?? "{id}"} 确认${confirmWhat}`,
-            "在「账号绑定」(/accounts) 关联本人 12306 会话",
-            "如出现验证码/短信/人脸，请在站内引导步骤手动完成（本站不会自动打码或绕过）",
-            ...trainRealSubmitDisabledNextSteps().filter((s) =>
-              /TRAIN_REAL_SUBMIT|支付|乘车人/.test(s)
-            ),
-            "本接口只创建草稿订单，不会自动提交或扣款",
-          ];
+        : channel === "flight"
+          ? [
+              `打开订单页 /orders/${existing?.id ?? "{id}"} 确认${confirmWhat}` +
+                (scheduleOnly ? "（当前为航班时刻/动态，不可售库存）" : ""),
+              "配置已授权的机票运价/库存 API（Amadeus Flight Offers / FLIGHT_PUBLIC_API_URL；OpenSky/Aviationstack 不可售）",
+              "在「账号绑定」(/accounts) 关联本人航司/OTA 会话（待用户登录官方）",
+              ...flightInventoryUnavailableNextSteps().filter((s) =>
+                /官方|支付|乘机人|运价|库存|Amadeus|FLIGHT_/.test(s)
+              ),
+              "本接口只创建草稿订单，不会自动提交或扣款，不会谎报已支付；提交将返回 FLIGHT_INVENTORY_UNAVAILABLE",
+            ]
+          : [
+              `打开订单页 /orders/${existing?.id ?? "{id}"} 确认${confirmWhat}`,
+              "在「账号绑定」(/accounts) 关联本人 12306 会话",
+              "如出现验证码/短信/人脸，请在站内引导步骤手动完成（本站不会自动打码或绕过）",
+              ...trainRealSubmitDisabledNextSteps().filter((s) =>
+                /TRAIN_REAL_SUBMIT|支付|乘车人/.test(s)
+              ),
+              "本接口只创建草稿订单，不会自动提交或扣款",
+            ];
 
     if (existing) {
       nextSteps[0] = `打开订单页 /orders/${existing.id} 确认${confirmWhat}`;
@@ -825,6 +846,9 @@ export async function requestRoutes(app: FastifyInstance) {
         travelers,
         trainRealSubmit: trainRealSubmitEnabled(),
         showAutoBuy: false,
+        flightInventoryLive,
+        flightAutoBuy: false,
+        scheduleOnly: channel === "flight" ? scheduleOnly : undefined,
         channel,
         nextSteps,
         orderPath: `/orders/${existing.id}`,
@@ -856,12 +880,20 @@ export async function requestRoutes(app: FastifyInstance) {
                   "验证码/风控须本人在官方完成；本站不自动购票",
                   "支付仅在官方大麦/猫眼收银台（待用户登录官方）；本站不代扣、不谎报已支付",
                 ]
-              : [
-                  `打开订单页确认车次与${personLabel}`,
-                  "在「账号绑定」(/accounts) 关联本人 12306 会话",
-                  "验证码/短信/人脸须本人完成；TRAIN_REAL_SUBMIT=1 后才可协助提交",
-                  "支付仅在官方 12306 收银台；本站不代扣",
-                ],
+              : channel === "flight"
+                ? [
+                    `打开订单页确认航班与${personLabel}` +
+                      (scheduleOnly ? "（时刻/动态，非可售库存）" : ""),
+                    "配置授权运价/库存 API（Amadeus 等；OpenSky/Aviationstack 不可售）",
+                    "在「账号绑定」(/accounts) 关联本人航司/OTA 会话（待用户登录官方）",
+                    "支付仅在官方航司/OTA 收银台（待用户登录官方）；本站不代扣、不谎报已支付",
+                  ]
+                : [
+                    `打开订单页确认车次与${personLabel}`,
+                    "在「账号绑定」(/accounts) 关联本人 12306 会话",
+                    "验证码/短信/人脸须本人完成；TRAIN_REAL_SUBMIT=1 后才可协助提交",
+                    "支付仅在官方 12306 收银台；本站不代扣",
+                  ],
           notes: "由抢票任务手动创建的草稿订单（未提交、未扣款）",
         }),
       },
@@ -904,6 +936,9 @@ export async function requestRoutes(app: FastifyInstance) {
       travelers,
       trainRealSubmit: trainRealSubmitEnabled(),
       showAutoBuy: false,
+      flightInventoryLive,
+      flightAutoBuy: false,
+      scheduleOnly: channel === "flight" ? scheduleOnly : undefined,
       channel,
       nextSteps,
       orderPath: `/orders/${order.id}`,

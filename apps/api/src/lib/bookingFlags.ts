@@ -126,3 +126,26 @@ export function showAutoBuyUnavailableNextSteps(): string[] {
     "观演人请在「出行人/观演人」(/travelers) 维护；订单须绑定 travelerIds",
   ];
 }
+
+/** Stable machine-readable code when flight fare/inventory API is not configured. */
+export const FLIGHT_INVENTORY_UNAVAILABLE_CODE = "FLIGHT_INVENTORY_UNAVAILABLE" as const;
+
+/** Alias for handoff/docs — same gate as inventory unavailable (no auto-buy). */
+export const FLIGHT_AUTO_BUY_UNAVAILABLE_CODE = "FLIGHT_AUTO_BUY_UNAVAILABLE" as const;
+
+/**
+ * Honest next steps when Amadeus / authorized fare inventory is not integrated.
+ * OpenSky / Aviationstack schedule must NEVER be treated as sellable inventory.
+ * Never mark paid — user must configure fare API + airline login + official pay.
+ */
+export function flightInventoryUnavailableNextSteps(): string[] {
+  return [
+    "配置已授权的机票运价/库存 API（如 Amadeus Flight Offers 或 FLIGHT_PUBLIC_API_URL；OpenSky/Aviationstack 仅为航班动态，不可售）",
+    "在「账号绑定」(/accounts) 关联本人航司/OTA 会话（待用户登录官方）",
+    "如出现验证码/风控/短信，请在官方 App 或站内引导步骤手动完成（本站不会自动打码或绕过）",
+    "真实机票自动下单未接入（FLIGHT_INVENTORY_UNAVAILABLE / FLIGHT_AUTO_BUY_UNAVAILABLE）：本站仅创建草稿并做官方收银台手递，不自动购票",
+    "支付仅在官方航司/OTA 收银台完成（待用户登录官方 · 本站不代收票款、不谎报已支付）",
+    "乘机人请在「出行人/乘机人」(/travelers) 维护；订单须绑定 travelerIds",
+  ];
+}
+

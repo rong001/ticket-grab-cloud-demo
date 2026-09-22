@@ -26,6 +26,10 @@ import {
   trainRealSubmitDisabledNextSteps,
   SHOW_AUTO_BUY_UNAVAILABLE_CODE,
   showAutoBuyUnavailableNextSteps,
+  FLIGHT_INVENTORY_UNAVAILABLE_CODE,
+  FLIGHT_AUTO_BUY_UNAVAILABLE_CODE,
+  flightInventoryUnavailableNextSteps,
+  resolveBookingFlags,
 } from "../lib/bookingFlags.js";
 import { travelerSummariesForIds } from "../lib/travelers.js";
 import {
@@ -428,6 +432,71 @@ export async function orderRoutes(app: FastifyInstance) {
         message:
           "Damai/Maoyan auto-buy API is not integrated. Draft + official handoff only; no fake paid success. User must login and pay on the official platform.",
         showAutoBuy: false,
+        nextSteps,
+        orderId: order.id,
+        status: fromPrismaOrderStatus(updated.status),
+        order: publicOrder(updated),
+      });
+    }
+
+
+    // Honest gate: authorized flight fare/inventory API is not configured.
+    // OpenSky/Aviationstack schedule ≠ sellable inventory. Stub keeps demo handoff.
+    // Never mark paid from schedule-only fixtures.
+    if (order.channel === "flight" && !stubMode()) {
+      const flags = resolveBookingFlags();
+      const nextSteps = flightInventoryUnavailableNextSteps();
+      const keepStatus = current === "submitting" ? "draft" : current;
+      const prevPayload = (order.payload ?? {}) as Record<string, unknown>;
+      const updated = await prisma.order.update({
+        where: { id },
+        data: {
+          status: toPrismaOrderStatus(keepStatus as OrderStatus),
+          errorMessage: FLIGHT_INVENTORY_UNAVAILABLE_CODE,
+          payload: asJson({
+            ...prevPayload,
+            nextSteps,
+            notes:
+              "FLIGHT_INVENTORY_UNAVAILABLE：未配置已授权机票运价/库存 API（OpenSky/Aviationstack 仅为航班动态，不可售）；未自动购票、未谎报已支付。请配置 Amadeus/授权运价 API + 航司登录 + 官方支付。",
+            bookingMode: {
+              stub: stubMode(),
+              dryRun: dryRunMode(),
+              trainRealSubmit: trainRealSubmitEnabled(),
+              showAutoBuy: false,
+              flightInventoryLive: flags.flightInventoryLive === true,
+              flightAutoBuy: false,
+            },
+            gate: {
+              code: FLIGHT_INVENTORY_UNAVAILABLE_CODE,
+              alias: FLIGHT_AUTO_BUY_UNAVAILABLE_CODE,
+              flightInventoryLive: false,
+              flightAutoBuy: false,
+            },
+          }),
+        },
+      });
+      await notifyOrder(
+        order.requestId,
+        order.id,
+        "order_submit_gated",
+        "机票库存/运价未接入（FLIGHT_INVENTORY_UNAVAILABLE）",
+        "请配置授权运价 API、绑定航司/OTA、在官方完成登录与支付。本站仅草稿/手递，不产生真实购票成功。",
+        {
+          orderId: order.id,
+          code: FLIGHT_INVENTORY_UNAVAILABLE_CODE,
+          flightInventoryLive: false,
+          flightAutoBuy: false,
+          status: fromPrismaOrderStatus(updated.status),
+        }
+      );
+      return reply.code(403).send({
+        code: FLIGHT_INVENTORY_UNAVAILABLE_CODE,
+        error: "flight_inventory_unavailable",
+        message:
+          "Authorized flight fare/inventory API is not configured (OpenSky/Aviationstack are schedule-only, not sellable). Draft + official handoff only; no fake paid success. Configure Amadeus/authorized fare API + airline login + official pay.",
+        flightInventoryLive: false,
+        flightAutoBuy: false,
+        alias: FLIGHT_AUTO_BUY_UNAVAILABLE_CODE,
         nextSteps,
         orderId: order.id,
         status: fromPrismaOrderStatus(updated.status),
