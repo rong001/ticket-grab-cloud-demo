@@ -292,7 +292,7 @@ export default function GrabsPage() {
                 </div>
                 {(j.travelers?.length || j.travelerIds?.length) ? (
                   <p className="meta" style={{ margin: "0.35rem 0 0" }}>
-                    乘车人{" "}
+                    {ch === "show" ? "观演人" : ch === "flight" ? "乘机人" : "乘车人"}{" "}
                     {j.travelers?.length
                       ? j.travelers.map((t) => `${t.name}${t.idNumberHint ? `(${t.idNumberHint})` : ""}`).join("、")
                       : `${j.travelerIds!.length} 人已绑定`}
@@ -312,15 +312,19 @@ export default function GrabsPage() {
                     查看
                   </button>
                 </Link>
-                {ch === "train" && (j.travelerIds?.length ?? 0) > 0 && (
+                {(ch === "train" || ch === "show") && (j.travelerIds?.length ?? 0) > 0 && (
                   <button
                     type="button"
                     className="btn-query"
                     disabled={busy === j.id}
                     onClick={() => createDraftOrder(j)}
-                    title="使用本任务已绑定的乘车人 + 最新短名单创建草稿订单（不提交、不扣款）"
+                    title={
+                      ch === "show"
+                        ? "使用本任务已绑定的观演人 + 最新短名单创建草稿订单（不提交、不扣款、不谎报已支付）"
+                        : "使用本任务已绑定的乘车人 + 最新短名单创建草稿订单（不提交、不扣款）"
+                    }
                   >
-                    用已选乘客创建草稿订单
+                    {ch === "show" ? "用已选观演人创建草稿订单" : "用已选乘客创建草稿订单"}
                   </button>
                 )}
                 {live && (

@@ -42,7 +42,7 @@ function refineAuthorizedConsent(
   if (data.relationship === "authorized" && data.authorizedConsent !== true) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "代购乘车人须勾选授权同意（authorizedConsent=true）",
+      message: "代购出行人/观演人须勾选授权同意（authorizedConsent=true）",
       path: ["authorizedConsent"],
     });
   }

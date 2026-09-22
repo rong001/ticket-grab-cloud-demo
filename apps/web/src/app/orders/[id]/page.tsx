@@ -53,7 +53,7 @@ function statusClass(status: string): string {
 }
 
 function relationshipLabel(r?: string): string {
-  if (r === "authorized") return "授权乘车人";
+  if (r === "authorized") return "授权代购";
   if (r === "self") return "本人";
   return r || "";
 }
@@ -82,7 +82,15 @@ export default function OrderDetailPage() {
       .then((d) => {
         setData(d);
         const gateCode = d.payload?.gate?.code ?? d.errorMessage;
-        if (
+        if (gateCode === "SHOW_AUTO_BUY_UNAVAILABLE") {
+          setGateOff({
+            code: "SHOW_AUTO_BUY_UNAVAILABLE",
+            nextSteps: d.payload?.nextSteps ?? [],
+            message:
+              d.payload?.notes ??
+              "真实大麦/猫眼下单 API 未接入；未自动购票、未谎报已支付。请用户登录官方完成支付。",
+          });
+        } else if (
           gateCode === "TRAIN_REAL_SUBMIT_DISABLED" ||
           d.payload?.gate?.trainRealSubmit === false
         ) {
@@ -111,13 +119,22 @@ export default function OrderDetailPage() {
       setGateOff(null);
       load();
     } catch (e) {
-      if (e instanceof ApiError && (e.code === "TRAIN_REAL_SUBMIT_DISABLED" || e.status === 403)) {
+      if (
+        e instanceof ApiError &&
+        (e.code === "TRAIN_REAL_SUBMIT_DISABLED" ||
+          e.code === "SHOW_AUTO_BUY_UNAVAILABLE" ||
+          e.status === 403)
+      ) {
         setGateOff({
-          code: e.code ?? "TRAIN_REAL_SUBMIT_DISABLED",
+          code: e.code ?? "SUBMIT_GATED",
           nextSteps: e.nextSteps,
           message: e.message,
         });
-        setInfo("协助提交已拒绝（门禁关闭）— 详见下方下一步。订单未标记已支付。");
+        setInfo(
+          e.code === "SHOW_AUTO_BUY_UNAVAILABLE"
+            ? "演出自动购票不可用 — 仅草稿/官方手递，未谎报已支付。详见下方下一步。"
+            : "协助提交已拒绝（门禁关闭）— 详见下方下一步。订单未标记已支付。"
+        );
         load();
       } else {
         setError(e instanceof Error ? e.message : "提交失败");
@@ -188,15 +205,22 @@ export default function OrderDetailPage() {
 
       {error && <p className="error" style={{ marginBottom: "1rem" }}>{error}</p>}
       {info && <p className="info-banner">{info}</p>}
-      {data.errorMessage && data.errorMessage !== "TRAIN_REAL_SUBMIT_DISABLED" && (
+      {data.errorMessage &&
+        data.errorMessage !== "TRAIN_REAL_SUBMIT_DISABLED" &&
+        data.errorMessage !== "SHOW_AUTO_BUY_UNAVAILABLE" && (
         <p className="error" style={{ marginBottom: "1rem" }}>{data.errorMessage}</p>
       )}
 
-      {gateOff && data.channel === "train" && (
+      {gateOff && (data.channel === "train" || data.channel === "show") && (
         <div className="card" style={{ borderColor: "var(--danger, #c45)", marginBottom: "1rem" }}>
-          <h2 className="section-title">协助提交未开启</h2>
+          <h2 className="section-title">
+            {data.channel === "show" ? "演出自动购票不可用" : "协助提交未开启"}
+          </h2>
           <p className="meta" style={{ marginTop: 0 }}>
-            <code>{gateOff.code}</code> · trainRealSubmit=false · 未调用 12306 占座/扣款
+            <code>{gateOff.code}</code>
+            {data.channel === "show"
+              ? " · showAutoBuy=false · 未调用大麦/猫眼自动购票、未谎报已支付"
+              : " · trainRealSubmit=false · 未调用 12306 占座/扣款"}
           </p>
           <p style={{ marginBottom: "0.75rem" }}>{gateOff.message}</p>
           {!!displayNextSteps.length && (
@@ -212,7 +236,7 @@ export default function OrderDetailPage() {
             </Link>
             <Link href="/travelers">
               <button type="button" className="secondary">
-                维护乘车人 /travelers
+                维护{personLabel} /travelers
               </button>
             </Link>
           </div>
@@ -244,7 +268,7 @@ export default function OrderDetailPage() {
           </Link>
           <Link href="/travelers">
             <button type="button" className="ghost">
-              乘车人
+              {personLabel}
             </button>
           </Link>
           {data.request?.id && (

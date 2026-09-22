@@ -12,6 +12,7 @@ import type { Prisma } from "@prisma/client";
 import {
   trainRealSubmitDisabledNextSteps,
   trainRealSubmitEnabled,
+  showAutoBuyUnavailableNextSteps,
 } from "../lib/bookingFlags.js";
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../lib/auth.js";
@@ -730,10 +731,13 @@ export async function requestRoutes(app: FastifyInstance) {
     });
     if (!watch) return reply.code(404).send({ error: "Watch job not found" });
 
+    const channel = watch.request.channel as string;
+    const personLabel =
+      channel === "show" ? "观演人" : channel === "flight" ? "乘机人" : "乘车人";
     const travelerIds = (watch as { travelerIds?: string[] }).travelerIds ?? [];
     if (!travelerIds.length) {
       return reply.code(400).send({
-        error: "该抢票任务未绑定乘车人；请先在创建盯票时选择 travelerIds",
+        error: `该抢票任务未绑定${personLabel}；请先在创建盯票时选择 travelerIds`,
         code: "TRAVELER_IDS_REQUIRED",
       });
     }
@@ -781,16 +785,35 @@ export async function requestRoutes(app: FastifyInstance) {
     });
 
     const travelers = await travelerSummariesForIds(user.sub, bind.travelerIds);
-    const nextSteps = [
-      `打开订单页 /orders/${existing?.id ?? "{id}"} 确认车次与乘车人`,
-      "在「账号绑定」(/accounts) 关联本人 12306 会话",
-      "如出现验证码/短信/人脸，请在站内引导步骤手动完成（本站不会自动打码或绕过）",
-      ...trainRealSubmitDisabledNextSteps().filter((s) => /TRAIN_REAL_SUBMIT|支付|乘车人/.test(s)),
-      "本接口只创建草稿订单，不会自动提交或扣款",
-    ];
+    const confirmWhat =
+      channel === "show"
+        ? `场次/票档与${personLabel}`
+        : channel === "flight"
+          ? `航班与${personLabel}`
+          : `车次与${personLabel}`;
+    const nextSteps =
+      channel === "show"
+        ? [
+            `打开订单页 /orders/${existing?.id ?? "{id}"} 确认${confirmWhat}`,
+            "在「账号绑定」(/accounts) 关联本人大麦或猫眼会话（待用户登录官方）",
+            "如出现验证码/风控/短信，请在官方 App 或站内引导步骤手动完成（本站不会自动打码或绕过）",
+            ...showAutoBuyUnavailableNextSteps().filter((s) =>
+              /官方|支付|观演人|下单 API/.test(s)
+            ),
+            "本接口只创建草稿订单，不会自动提交或扣款，不会谎报已支付",
+          ]
+        : [
+            `打开订单页 /orders/${existing?.id ?? "{id}"} 确认${confirmWhat}`,
+            "在「账号绑定」(/accounts) 关联本人 12306 会话",
+            "如出现验证码/短信/人脸，请在站内引导步骤手动完成（本站不会自动打码或绕过）",
+            ...trainRealSubmitDisabledNextSteps().filter((s) =>
+              /TRAIN_REAL_SUBMIT|支付|乘车人/.test(s)
+            ),
+            "本接口只创建草稿订单，不会自动提交或扣款",
+          ];
 
     if (existing) {
-      nextSteps[0] = `打开订单页 /orders/${existing.id} 确认车次与乘车人`;
+      nextSteps[0] = `打开订单页 /orders/${existing.id} 确认${confirmWhat}`;
       return {
         orderId: existing.id,
         status: existing.status === "awaiting_login" ? "awaiting_login" : "draft",
@@ -801,6 +824,8 @@ export async function requestRoutes(app: FastifyInstance) {
         travelerIds: bind.travelerIds,
         travelers,
         trainRealSubmit: trainRealSubmitEnabled(),
+        showAutoBuy: false,
+        channel,
         nextSteps,
         orderPath: `/orders/${existing.id}`,
       };
@@ -823,18 +848,26 @@ export async function requestRoutes(app: FastifyInstance) {
           shortlistItem: item,
           watchJobId,
           createdFromWatch: true,
-          nextSteps: [
-            `打开订单页确认车次与乘车人`,
-            "在「账号绑定」(/accounts) 关联本人 12306 会话",
-            "验证码/短信/人脸须本人完成；TRAIN_REAL_SUBMIT=1 后才可协助提交",
-            "支付仅在官方 12306 收银台；本站不代扣",
-          ],
+          nextSteps:
+            channel === "show"
+              ? [
+                  `打开订单页确认场次/票档与${personLabel}`,
+                  "在「账号绑定」(/accounts) 关联本人大麦或猫眼会话（待用户登录官方）",
+                  "验证码/风控须本人在官方完成；本站不自动购票",
+                  "支付仅在官方大麦/猫眼收银台（待用户登录官方）；本站不代扣、不谎报已支付",
+                ]
+              : [
+                  `打开订单页确认车次与${personLabel}`,
+                  "在「账号绑定」(/accounts) 关联本人 12306 会话",
+                  "验证码/短信/人脸须本人完成；TRAIN_REAL_SUBMIT=1 后才可协助提交",
+                  "支付仅在官方 12306 收银台；本站不代扣",
+                ],
           notes: "由抢票任务手动创建的草稿订单（未提交、未扣款）",
         }),
       },
     });
 
-    nextSteps[0] = `打开订单页 /orders/${order.id} 确认车次与乘车人`;
+    nextSteps[0] = `打开订单页 /orders/${order.id} 确认${confirmWhat}`;
 
     await prisma.notificationEvent.create({
       data: {
@@ -870,6 +903,8 @@ export async function requestRoutes(app: FastifyInstance) {
       travelerIds: bind.travelerIds,
       travelers,
       trainRealSubmit: trainRealSubmitEnabled(),
+      showAutoBuy: false,
+      channel,
       nextSteps,
       orderPath: `/orders/${order.id}`,
     });

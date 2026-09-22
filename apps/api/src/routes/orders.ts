@@ -24,6 +24,8 @@ import {
   trainRealSubmitEnabled,
   TRAIN_REAL_SUBMIT_DISABLED_CODE,
   trainRealSubmitDisabledNextSteps,
+  SHOW_AUTO_BUY_UNAVAILABLE_CODE,
+  showAutoBuyUnavailableNextSteps,
 } from "../lib/bookingFlags.js";
 import { travelerSummariesForIds } from "../lib/travelers.js";
 import {
@@ -371,6 +373,61 @@ export async function orderRoutes(app: FastifyInstance) {
         message:
           "12306 assistive submit is disabled on this deployment (TRAIN_REAL_SUBMIT≠1). No live confirm/seat-hold/charge was attempted. Monitor/notify and official redirect remain available.",
         trainRealSubmit: false,
+        nextSteps,
+        orderId: order.id,
+        status: fromPrismaOrderStatus(updated.status),
+        order: publicOrder(updated),
+      });
+    }
+
+    // Honest gate: real Damai/Maoyan auto-buy API is not integrated.
+    // Stub mode keeps demo handoff (STUB-SHOW-*). Never mark paid from fixtures.
+    if (order.channel === "show" && !stubMode()) {
+      const nextSteps = showAutoBuyUnavailableNextSteps();
+      const keepStatus = current === "submitting" ? "draft" : current;
+      const prevPayload = (order.payload ?? {}) as Record<string, unknown>;
+      const updated = await prisma.order.update({
+        where: { id },
+        data: {
+          status: toPrismaOrderStatus(keepStatus as OrderStatus),
+          errorMessage: SHOW_AUTO_BUY_UNAVAILABLE_CODE,
+          payload: asJson({
+            ...prevPayload,
+            nextSteps,
+            notes:
+              "SHOW_AUTO_BUY_UNAVAILABLE：真实大麦/猫眼下单 API 未接入；未自动购票、未谎报已支付。请用户登录官方完成支付。",
+            bookingMode: {
+              stub: stubMode(),
+              dryRun: dryRunMode(),
+              trainRealSubmit: trainRealSubmitEnabled(),
+              showAutoBuy: false,
+            },
+            gate: {
+              code: SHOW_AUTO_BUY_UNAVAILABLE_CODE,
+              showAutoBuy: false,
+            },
+          }),
+        },
+      });
+      await notifyOrder(
+        order.requestId,
+        order.id,
+        "order_submit_gated",
+        "演出自动购票不可用（SHOW_AUTO_BUY_UNAVAILABLE）",
+        "请绑定大麦/猫眼、在官方完成登录与支付。本站仅草稿/手递，不产生真实购票成功。",
+        {
+          orderId: order.id,
+          code: SHOW_AUTO_BUY_UNAVAILABLE_CODE,
+          showAutoBuy: false,
+          status: fromPrismaOrderStatus(updated.status),
+        }
+      );
+      return reply.code(403).send({
+        code: SHOW_AUTO_BUY_UNAVAILABLE_CODE,
+        error: "show_auto_buy_unavailable",
+        message:
+          "Damai/Maoyan auto-buy API is not integrated. Draft + official handoff only; no fake paid success. User must login and pay on the official platform.",
+        showAutoBuy: false,
         nextSteps,
         orderId: order.id,
         status: fromPrismaOrderStatus(updated.status),

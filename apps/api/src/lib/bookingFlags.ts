@@ -109,3 +109,20 @@ export function trainRealSubmitDisabledNextSteps(): string[] {
     "乘车人请在「乘车人」(/travelers) 维护；订单须绑定 travelerIds",
   ];
 }
+
+/** Stable machine-readable code when Damai/Maoyan auto-buy is unavailable. */
+export const SHOW_AUTO_BUY_UNAVAILABLE_CODE = "SHOW_AUTO_BUY_UNAVAILABLE" as const;
+
+/**
+ * Honest next steps when show auto-buy API is not integrated.
+ * Never mark paid — user must login + pay on official Damai/Maoyan.
+ */
+export function showAutoBuyUnavailableNextSteps(): string[] {
+  return [
+    "在「账号绑定」(/accounts) 关联本人大麦或猫眼会话（待用户登录官方）",
+    "如出现验证码/风控/短信，请在官方 App 或站内引导步骤手动完成（本站不会自动打码或绕过）",
+    "真实大麦/猫眼下单 API 未接入：本站仅创建草稿并做官方收银台手递，不自动购票",
+    "支付仅在官方大麦/猫眼收银台完成（待用户登录官方 · 本站不代收票款、不谎报已支付）",
+    "观演人请在「出行人/观演人」(/travelers) 维护；订单须绑定 travelerIds",
+  ];
+}

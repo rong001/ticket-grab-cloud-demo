@@ -75,7 +75,7 @@ export default function TravelersPage() {
   }
 
   async function onDelete(id: string) {
-    if (!confirm("删除该乘车人？")) return;
+    if (!confirm("删除该出行人/观演人？")) return;
     await api(`/travelers/${id}`, { method: "DELETE" });
     load();
   }
@@ -84,9 +84,9 @@ export default function TravelersPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">乘车人</h1>
+          <h1 className="page-title">出行人 / 观演人</h1>
           <p className="lead">
-            证件号加密存储，列表仅显示尾号。代购须勾选授权同意。绑定到盯票任务后可多乘客抢票（正式下单仍受门禁限制）。
+            火车乘车人、演出观演人、机票乘机人共用档案。证件号加密存储，列表仅显示尾号。代购须勾选授权同意。绑定到盯票任务后可多人抢票（正式下单仍受门禁限制）。
           </p>
         </div>
       </div>
@@ -151,7 +151,7 @@ export default function TravelersPage() {
                 onChange={(e) => setConsent(e.target.checked)}
                 required
               />
-              <span>我确认已获得该乘车人授权，仅用于本人协助购票，证件信息加密存储。</span>
+              <span>我确认已获得该出行人/观演人授权，仅用于本人协助购票，证件信息加密存储。</span>
             </label>
           )}
           <button type="submit" disabled={busy || (relationship === "authorized" && !consent)}>
@@ -165,8 +165,8 @@ export default function TravelersPage() {
         {!loaded && <p className="loading">加载中…</p>}
         {loaded && !rows.length && (
           <div className="empty" style={{ padding: "2rem 1rem" }}>
-            <p className="empty-title">暂无乘车人</p>
-            <p className="empty-desc">添加后可在对话建单确认或定时抢票时多选绑定。</p>
+            <p className="empty-title">暂无出行人 / 观演人</p>
+            <p className="empty-desc">添加后可在对话建单确认或定时抢票时多选绑定（火车/演出/机票）。</p>
           </div>
         )}
         {rows.map((t) => (
