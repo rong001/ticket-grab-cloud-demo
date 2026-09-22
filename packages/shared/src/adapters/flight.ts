@@ -6,6 +6,7 @@ import {
   resolveProviderMode,
   type LiveAttempt,
 } from "./liveMode.js";
+import { recordFlightScheduleFetch } from "./dataSources.js";
 
 function fixtureItems(fields: FlightFields): ShortlistItem[] {
   const date = fields.date;
@@ -484,10 +485,10 @@ export const flightAdapter: TicketAdapter = {
     if (result.liveOk && scheduleOnly) {
       if (provider === "opensky") {
         result.notes =
-          "OpenSky ADS-B 公开离港（无票价、无余票）。非航司可售库存；配置 Amadeus Flight Offers 后可获得可订报价。flightScheduleLive 仅表示时刻/轨迹源，不等于 inventoryLive。";
+          "OpenSky ADS-B 公开离港（无票价、无余票）。非航司可售库存；配置 Amadeus Flight Offers 后可获得可订报价。flightScheduleConfigured 表示 ADS-B 已配置；flightScheduleLive 仅在最近一次拉取成功时为 true，不等于 inventoryLive。";
       } else {
         result.notes =
-          "Aviationstack 时刻/状态（无可靠票价、无可售座位证明）。flightScheduleLive 可 true，flightInventoryLive 仍为 false；不会作为「可抢/有票」成功。";
+          "Aviationstack 时刻/状态（无可靠票价、无可售座位证明）。flightScheduleConfigured 可 true；flightScheduleLive 仅最近一次时刻拉取成功时为 true；flightInventoryLive 仍为 false；不会作为「可抢/有票」成功。";
       }
       for (const item of result.items) {
         if (item.availability === "available" || item.availability === "limited") {
@@ -500,6 +501,16 @@ export const flightAdapter: TicketAdapter = {
           inventoryHonest: false,
         };
       }
+    }
+    if (mode === "live") {
+      // Schedule/ADS-B honesty: last fetch outcome (429/404 → false). Config alone never sets live.
+      const scheduleProviderOk =
+        result.liveOk &&
+        (provider === "opensky" ||
+          provider === "aviationstack" ||
+          provider === "amadeus" ||
+          provider === "flight_public");
+      recordFlightScheduleFetch(scheduleProviderOk);
     }
     if (!result.liveOk && mode === "live") {
       const reason = live.error ?? "live fetch failed";

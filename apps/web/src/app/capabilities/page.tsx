@@ -87,7 +87,7 @@ export default function CapabilitiesPage() {
       <div className="info-banner live-fail-banner" role="status" style={{ marginBottom: "0.75rem" }}>
         当前生产未配置 Amadeus Flight Offers 等授权可售库存/票价源。Aviationstack 仅时刻表；
         OpenSky ADS-B 仅有离港轨迹，<strong>都不算可售库存</strong>。健康检查字段：
-        <code>flightInventoryLive=false</code> · <code>flightScheduleLive</code>（时刻/ADS-B 配置）·{" "}
+        <code>flightInventoryLive=false</code> · <code>flightScheduleConfigured</code>（时刻/ADS-B 已配置）· <code>flightScheduleLive</code>（最近拉取成功，非配置）·{" "}
         <code>flightFareMonitor=false</code>。
         仅提供查询失败诚实提示 + 官方跳转演示；不会发送虚假「发现可购票/可抢」通知。
       </div>
@@ -115,7 +115,7 @@ export default function CapabilitiesPage() {
             </td>
             <td>
               需正式接入 <strong>Amadeus Flight Offers</strong>（或同等可售库存/票价 API）后才开启。
-              Aviationstack 只能点亮 scheduleLive。见仓库 <code>FLIGHT_SOURCE_ROADMAP.md</code>。
+              Aviationstack 只能点亮 scheduleConfigured；scheduleLive 仅最近一次时刻拉取成功。见仓库 <code>FLIGHT_SOURCE_ROADMAP.md</code>。
             </td>
           </tr>
           <tr>

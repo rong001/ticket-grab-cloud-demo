@@ -98,6 +98,7 @@ export default function NewRequestPage() {
     mode?: string;
     provider?: string;
     inventoryLive?: boolean;
+    scheduleConfigured?: boolean;
     scheduleLive?: boolean;
     fareMonitor?: boolean;
   } | null>(null);
@@ -433,6 +434,7 @@ export default function NewRequestPage() {
         mode?: string;
         provider?: string;
         inventoryLive?: boolean;
+        scheduleConfigured?: boolean;
         scheduleLive?: boolean;
         fareMonitor?: boolean;
       }>("/public/search", {
@@ -448,6 +450,7 @@ export default function NewRequestPage() {
         mode: res.mode,
         provider: res.provider,
         inventoryLive: res.inventoryLive === true,
+        scheduleConfigured: res.scheduleConfigured === true,
         scheduleLive: res.scheduleLive === true,
         fareMonitor: res.fareMonitor === true,
       });
@@ -993,7 +996,9 @@ export default function NewRequestPage() {
                   ? "实时可售"
                   : publicMeta.scheduleLive
                     ? "时刻表(无票价·不可抢)"
-                    : "实时可售票/票价监控不可用"
+                    : publicMeta.scheduleConfigured
+                      ? "时刻源已配置·最近拉取失败"
+                      : "实时可售票/票价监控不可用"
                 : publicMeta.liveOk
                   ? "实时"
                   : "非实时/回退"}
@@ -1009,7 +1014,9 @@ export default function NewRequestPage() {
           {!publicMeta.liveOk && (
             <p className="info-banner live-fail-banner" role="status">
               {channel === "flight"
-                ? "机票「实时可售票/票价监控不可用」：OpenSky ADS-B / Aviationstack 时刻 / fixture 不算可售库存，不会标「可抢」。仅查询与官方跳转演示。"
+                ? publicMeta.scheduleConfigured && !publicMeta.scheduleLive
+                  ? "机票时刻源已配置，但最近一次实时拉取失败（如 OpenSky 429/404）。不算可售库存，不会标「可抢」/「实时」。仅查询与官方跳转演示。"
+                  : "机票「实时可售票/票价监控不可用」：OpenSky ADS-B / Aviationstack 时刻 / fixture 不算可售库存，不会标「可抢」。仅查询与官方跳转演示。"
                 : "当前非实时库存（fixture 或上游回退）。PROVIDER_MODE=live 也不等于已获官方代售授权。"}
             </p>
           )}

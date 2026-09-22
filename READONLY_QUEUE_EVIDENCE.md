@@ -42,6 +42,15 @@ docker compose -f docker-compose.prod.yml exec -T redis \
 After cancel, the proof `watchJobId` must be **absent** from repeatable hash `data.watchJobId` fields.  
 This mirrors the older `CANCEL_REPEATABLE_PROOF.md` timeline but is **not** needed for self-serve pass.
 
+## Evidence boundary (important)
+
+`CANCEL_REPEATABLE_SELFTEST.sh` proves **API self-report only**:
+- watch `status=cancelled`
+- `lastRunAt` freeze across the poll window
+- `repeatableArmed=false` as returned by the API
+
+It does **NOT** prove third-party Redis key absence or worker log absence. Those remain optional operator-only cross-checks (see above). Do not treat the selftest as a Redis/worker read.
+
 ## Labels
 
 | Item | Status |

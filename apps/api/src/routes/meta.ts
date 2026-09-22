@@ -38,7 +38,9 @@ export async function metaRoutes(app: FastifyInstance) {
       channels: sources,
       strictLive: process.env.STRICT_LIVE === "1" || process.env.STRICT_LIVE === "true",
       // Top-level honesty aliases for UI / ops (also on each channel row).
+      // scheduleConfigured = source enabled; scheduleLive = last successful fetch only.
       flightInventoryLive: flight?.inventoryLive === true,
+      flightScheduleConfigured: flight?.scheduleConfigured === true,
       flightScheduleLive: flight?.scheduleLive === true,
       flightFareMonitor: flight?.fareMonitor === true,
       flightLabelZh: flight?.labelZh ?? "实时可售票/票价监控不可用",
@@ -294,7 +296,7 @@ export async function metaRoutes(app: FastifyInstance) {
     const scheduleHit =
       body.channel === "flight" &&
       result.liveOk === true &&
-      (scheduleProvider || scheduleOnlyMeta);
+      (scheduleProvider || scheduleOnlyMeta || isFlightInventoryProvider(result.provider));
     // Inventory liveOk for UI: schedule-only must not green-badge as 可售.
     const inventoryLiveOk =
       body.channel === "flight"
@@ -303,13 +305,17 @@ export async function metaRoutes(app: FastifyInstance) {
           isFlightInventoryProvider(result.provider) &&
           !scheduleOnlyMeta
         : result.liveOk === true;
+    const scheduleConfigured =
+      body.channel === "flight" ? honesty.flightScheduleConfigured === true : undefined;
     return {
       channel: result.channel,
       provider: result.provider,
       mode: result.mode,
       items: result.items,
       liveOk: inventoryLiveOk,
-      /** True only when this response carried schedule/ADS-B data (failed OpenSky → false). */
+      /** Source configured (OpenSky enabled / Aviationstack key) — not fetch success. */
+      scheduleConfigured,
+      /** True only when this response's realtime schedule/ADS-B fetch succeeded (429/404 → false). */
       scheduleLive: body.channel === "flight" ? scheduleHit : undefined,
       inventoryLive: body.channel === "flight" ? inventoryLiveOk : undefined,
       fareMonitor:

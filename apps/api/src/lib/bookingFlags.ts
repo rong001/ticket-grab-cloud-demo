@@ -30,13 +30,19 @@ export type BookingFlags = {
   realTrainSubmit: boolean;
   /** True only with Amadeus Flight Offers / FLIGHT_PUBLIC_API_URL — not Aviationstack/OpenSky. */
   flightInventoryLive: boolean;
-  /** True when schedule/status/ADS-B/timetable source is configured. */
+  /** True when schedule/status/ADS-B/timetable source is configured (not last-fetch success). */
+  flightScheduleConfigured: boolean;
+  /**
+   * True only after a successful realtime schedule fetch in this process.
+   * Config alone (OpenSky enabled) must NOT set this — 429/404 leave it false.
+   */
   flightScheduleLive: boolean;
   /** True when a fare/price monitor source is configured. */
   flightFareMonitor: boolean;
   flightProvider: string;
   flightLabelZh: string;
   flightNotes: string;
+  flightScheduleFetchAt: string | null;
 };
 
 function envFlagOn(...names: string[]): boolean {
@@ -64,11 +70,13 @@ export function resolveBookingFlags(): BookingFlags {
     trainRealSubmit,
     realTrainSubmit: trainRealSubmit && !bookingStub,
     flightInventoryLive: flight.flightInventoryLive,
+    flightScheduleConfigured: flight.flightScheduleConfigured,
     flightScheduleLive: flight.flightScheduleLive,
     flightFareMonitor: flight.flightFareMonitor,
     flightProvider: flight.flightProvider,
     flightLabelZh: flight.flightLabelZh,
     flightNotes: flight.flightNotes,
+    flightScheduleFetchAt: flight.flightScheduleFetchAt,
   };
 }
 

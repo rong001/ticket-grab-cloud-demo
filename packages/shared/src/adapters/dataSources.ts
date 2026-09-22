@@ -13,8 +13,15 @@ export type ChannelDataStatus = {
    */
   inventoryLive: boolean;
   /**
-   * True when a schedule/status/ADS-B/timetable source is configured
+   * True when a schedule/status/ADS-B/timetable source is **configured**
    * (Aviationstack, OpenSky, or inventory sources that also expose schedules).
+   * Does NOT mean the last HTTP fetch succeeded — see scheduleLive.
+   */
+  scheduleConfigured: boolean;
+  /**
+   * True when the **last realtime schedule/ADS-B fetch in this process succeeded**.
+   * Health/meta with no probe stay false; public search sets this from the current query.
+   * Never infer from scheduleConfigured alone (OpenSky 429/404 → false).
    */
   scheduleLive: boolean;
   /** True when a fare/price monitor source is configured (Amadeus shopping, etc.). */
@@ -50,10 +57,33 @@ export function flightFareMonitorConfigured(): boolean {
   return false;
 }
 
+/**
+ * Process-local last flight schedule/ADS-B fetch outcome.
+ * Updated by flight adapter / public search; health reads this so it never
+ * claims scheduleLive=true merely because OpenSky/Aviationstack is configured.
+ */
+let lastFlightScheduleFetchOk = false;
+let lastFlightScheduleFetchAt: string | null = null;
+
+export function recordFlightScheduleFetch(ok: boolean): void {
+  lastFlightScheduleFetchOk = ok === true;
+  lastFlightScheduleFetchAt = new Date().toISOString();
+}
+
+export function getLastFlightScheduleFetch(): { ok: boolean; at: string | null } {
+  return { ok: lastFlightScheduleFetchOk, at: lastFlightScheduleFetchAt };
+}
+
+/** Test helper — reset process-local schedule fetch probe state. */
+export function resetFlightScheduleFetchForTests(): void {
+  lastFlightScheduleFetchOk = false;
+  lastFlightScheduleFetchAt = null;
+}
+
 function flightLiveConfigured(): {
   configured: boolean;
   inventoryLive: boolean;
-  scheduleLive: boolean;
+  scheduleConfigured: boolean;
   fareMonitor: boolean;
   provider: string;
   notes: string;
@@ -64,7 +94,7 @@ function flightLiveConfigured(): {
     return {
       configured: true,
       inventoryLive: true,
-      scheduleLive: true,
+      scheduleConfigured: true,
       fareMonitor: true,
       provider: "amadeus",
       notes: "Amadeus Self-Service Flight Offers (AMADEUS_CLIENT_ID + AMADEUS_CLIENT_SECRET) — bookable offers + fares.",
@@ -76,7 +106,7 @@ function flightLiveConfigured(): {
     return {
       configured: true,
       inventoryLive: true,
-      scheduleLive: true,
+      scheduleConfigured: true,
       fareMonitor: true,
       provider: "flight_public",
       notes: `Custom FLIGHT_PUBLIC_API_URL=${process.env.FLIGHT_PUBLIC_API_URL} (treated as inventory/fare when it returns bookable offers).`,
@@ -88,11 +118,11 @@ function flightLiveConfigured(): {
     return {
       configured: true,
       inventoryLive: false,
-      scheduleLive: true,
+      scheduleConfigured: true,
       fareMonitor: false,
       provider: "aviationstack",
       notes:
-        "Aviationstack (FLIGHT_API_KEY) — schedule/status ONLY. No reliable fares or sellable inventory. flightInventoryLive stays false; prefer Amadeus Flight Offers for inventoryLive.",
+        "Aviationstack (FLIGHT_API_KEY) — schedule/status ONLY. No reliable fares or sellable inventory. flightScheduleConfigured may be true; flightScheduleLive follows last successful fetch (not config alone). Prefer Amadeus Flight Offers for inventoryLive.",
       badge: "unavailable",
       labelZh: "实时可售票/票价监控不可用",
     };
@@ -101,11 +131,11 @@ function flightLiveConfigured(): {
     return {
       configured: true,
       inventoryLive: false,
-      scheduleLive: true,
+      scheduleConfigured: true,
       fareMonitor: false,
       provider: "opensky",
       notes:
-        "OpenSky Network ADS-B only (no fares, no bookable inventory). 「实时可售票/票价监控不可用」. Set AMADEUS_CLIENT_ID+SECRET for inventory; FLIGHT_OPENSKY=0 to disable ADS-B fallback.",
+        "OpenSky Network ADS-B only (no fares, no bookable inventory). 「实时可售票/票价监控不可用」. flightScheduleConfigured=true means ADS-B is enabled; flightScheduleLive is last successful fetch only (429/404 → false). Set AMADEUS_CLIENT_ID+SECRET for inventory; FLIGHT_OPENSKY=0 to disable ADS-B fallback.",
       badge: "unavailable",
       labelZh: "实时可售票/票价监控不可用",
     };
@@ -113,7 +143,7 @@ function flightLiveConfigured(): {
   return {
     configured: false,
     inventoryLive: false,
-    scheduleLive: false,
+    scheduleConfigured: false,
     fareMonitor: false,
     provider: "flight",
     notes:
@@ -129,6 +159,7 @@ export function describeDataSources(opts?: {
 }): ChannelDataStatus[] {
   const mode = opts?.providerMode ?? ((process.env.PROVIDER_MODE as ProviderMode) || "fixture");
   const flight = flightLiveConfigured();
+  const lastSched = getLastFlightScheduleFetch();
 
   const trainLive = mode === "live";
   const showLive = mode === "live";
@@ -139,6 +170,7 @@ export function describeDataSources(opts?: {
       mode: trainLive ? "live" : "fixture",
       liveConfigured: true,
       inventoryLive: trainLive,
+      scheduleConfigured: trainLive,
       scheduleLive: trainLive,
       fareMonitor: false,
       badge: trainLive ? "live" : "fixture",
@@ -153,6 +185,7 @@ export function describeDataSources(opts?: {
       mode: showLive ? "live" : "fixture",
       liveConfigured: true,
       inventoryLive: showLive,
+      scheduleConfigured: showLive,
       scheduleLive: showLive,
       fareMonitor: false,
       badge: showLive ? "live" : "fixture",
@@ -168,7 +201,9 @@ export function describeDataSources(opts?: {
       mode: mode === "live" && flight.inventoryLive ? "live" : "fixture",
       liveConfigured: flight.configured,
       inventoryLive: mode === "live" && flight.inventoryLive,
-      scheduleLive: mode === "live" && flight.scheduleLive,
+      scheduleConfigured: mode === "live" && flight.scheduleConfigured,
+      // Never claim live success from config alone — last process fetch only.
+      scheduleLive: mode === "live" && flight.scheduleConfigured && lastSched.ok,
       fareMonitor: mode === "live" && flight.fareMonitor,
       badge:
         mode !== "live"
@@ -193,21 +228,31 @@ export function describeDataSources(opts?: {
 /** Aggregate honesty flags for /health and UI banners. */
 export function describeFlightHonesty(opts?: { providerMode?: ProviderMode }): {
   flightInventoryLive: boolean;
+  /** Schedule/ADS-B source configured (OpenSky enabled or Aviationstack/Amadeus key). */
+  flightScheduleConfigured: boolean;
+  /**
+   * Last successful realtime schedule fetch in this process.
+   * False until a successful probe/search; false after 429/404/fail.
+   */
   flightScheduleLive: boolean;
   flightFareMonitor: boolean;
   flightProvider: string;
   flightLabelZh: string;
   flightNotes: string;
+  flightScheduleFetchAt: string | null;
 } {
   const channels = describeDataSources(opts);
   const flight = channels.find((c) => c.channel === "flight")!;
+  const last = getLastFlightScheduleFetch();
   return {
     flightInventoryLive: flight.inventoryLive,
+    flightScheduleConfigured: flight.scheduleConfigured,
     flightScheduleLive: flight.scheduleLive,
     flightFareMonitor: flight.fareMonitor,
     flightProvider: flight.provider,
     flightLabelZh: flight.labelZh,
     flightNotes: flight.notes,
+    flightScheduleFetchAt: last.at,
   };
 }
 

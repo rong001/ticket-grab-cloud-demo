@@ -198,13 +198,15 @@ export async function buildApp() {
       trainRealSubmit: flags.trainRealSubmit,
       // Deprecated: now equals trainRealSubmit&&!bookingStub (was !bookingStub — misleading).
       realTrainSubmit: flags.realTrainSubmit,
-      // Flight honesty: Aviationstack/OpenSky = schedule only; inventory needs Amadeus Offers.
+      // Flight honesty: configured ≠ last fetch. OpenSky 429 → scheduleLive false.
       flightInventoryLive: flags.flightInventoryLive,
+      flightScheduleConfigured: flags.flightScheduleConfigured,
       flightScheduleLive: flags.flightScheduleLive,
       flightFareMonitor: flags.flightFareMonitor,
       flightProvider: flags.flightProvider,
       flightLabelZh: flags.flightLabelZh,
       flightNotes: flags.flightNotes,
+      flightScheduleFetchAt: flags.flightScheduleFetchAt,
     };
   });
 
