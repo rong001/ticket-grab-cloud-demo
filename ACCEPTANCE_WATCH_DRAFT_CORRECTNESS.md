@@ -34,9 +34,9 @@ cd apps/api && pnpm run test:watch-draft-correctness
 
 ## Commit SHAs
 
-- Private: `2247f07c6495c84cb23a5046cf8834b24740d441` (docs tip `618a5d937fc35addaa052abe24ab36b1919d65f2`)
+- Private: `2247f07c6495c84cb23a5046cf8834b24740d441` (docs tip `c953d6966007ccbd0de56c5ba548f8e9c8025829`)
 - Public demo: `22cbe7a7b1b1458d7825068490bd485f2b1056b1` — https://github.com/rong001/ticket-grab-cloud-demo/commit/22cbe7a7b1b1458d7825068490bd485f2b1056b1  
-  (docs tip `f98f4b4be73bbc9c4c0dfdbc6217e772e1e0d49d` — https://github.com/rong001/ticket-grab-cloud-demo/commit/f98f4b4be73bbc9c4c0dfdbc6217e772e1e0d49d)
+  (docs tip `5dc5db2ff524c219881b71afea97b906a951249b` — https://github.com/rong001/ticket-grab-cloud-demo/commit/5dc5db2ff524c219881b71afea97b906a951249b)
 
 ## Live evidence
 
