@@ -1,3 +1,4 @@
+import { describeFlightHonesty } from "@ticket-grab/shared";
 import { env } from "../env.js";
 
 /**
@@ -27,6 +28,13 @@ export type BookingFlags = {
    * Previously meant !bookingStub only — that was misleading for ToC honesty.
    */
   realTrainSubmit: boolean;
+  /** True only with Amadeus/Aviationstack/FLIGHT_PUBLIC_API_URL — not OpenSky ADS-B. */
+  flightInventoryLive: boolean;
+  /** True when a fare/price monitor source is configured. */
+  flightFareMonitor: boolean;
+  flightProvider: string;
+  flightLabelZh: string;
+  flightNotes: string;
 };
 
 function envFlagOn(...names: string[]): boolean {
@@ -44,6 +52,7 @@ export function resolveBookingFlags(): BookingFlags {
   const trainBookingDryRun = process.env.TRAIN_BOOKING_DRY_RUN === "1";
   const trainRealSubmit = envFlagOn("TRAIN_REAL_SUBMIT", "TRAIN_SUBMIT_ENABLED");
   const trainLiveQuery = env.providerMode === "live";
+  const flight = describeFlightHonesty({ providerMode: env.providerMode });
 
   return {
     providerMode: env.providerMode,
@@ -52,6 +61,11 @@ export function resolveBookingFlags(): BookingFlags {
     trainLiveQuery,
     trainRealSubmit,
     realTrainSubmit: trainRealSubmit && !bookingStub,
+    flightInventoryLive: flight.flightInventoryLive,
+    flightFareMonitor: flight.flightFareMonitor,
+    flightProvider: flight.flightProvider,
+    flightLabelZh: flight.flightLabelZh,
+    flightNotes: flight.flightNotes,
   };
 }
 

@@ -8,7 +8,7 @@ import {
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../lib/auth.js";
 import { logActivity } from "../lib/activity.js";
-import { getWatchQueue, getRedis, WATCH_QUEUE, type WatchJobPayload } from "../lib/queue.js";
+import { getWatchQueue, removeWatchRepeatable, type WatchJobPayload } from "../lib/queue.js";
 import { env } from "../env.js";
 
 export async function requestRoutes(app: FastifyInstance) {
@@ -248,7 +248,11 @@ export async function requestRoutes(app: FastifyInstance) {
     });
 
     const channelLabel =
-      row.channel === "show" ? "定时抢票 / 开售自动抢" : row.channel === "train" ? "定时抢票" : "定时盯票";
+      row.channel === "show"
+        ? "定时抢票 / 开售自动抢"
+        : row.channel === "train"
+          ? "定时抢票"
+          : "航班查询演示（库存监控不可用）";
 
     await prisma.notificationEvent.create({
       data: {
@@ -260,6 +264,9 @@ export async function requestRoutes(app: FastifyInstance) {
           startsAt ? `Starts at ${startsAt.toISOString()}` : "First run ASAP",
           autoOrder ? "autoOrder=on (draft/awaiting_login only; captcha/SMS still need you)" : "notify only",
           preferences ? `prefs=${JSON.stringify(preferences)}` : null,
+          row.channel === "flight"
+            ? "实时可售票/票价监控不可用 — ticks will be degraded; no fake tickets_found"
+            : null,
         ]
           .filter(Boolean)
           .join(" · "),
@@ -298,45 +305,21 @@ export async function requestRoutes(app: FastifyInstance) {
     if (!job) return reply.code(404).send({ error: "Watch job not found" });
 
     try {
-      const queue = getWatchQueue();
-      // BullMQ repeatable keys are content hashes — they do NOT embed our cuid jobId.
-      // Match by (1) r.id / key includes, (2) removeRepeatable(name, every, jobId),
-      // (3) Redis hash payload.watchJobId for leftover orphans.
-      try {
-        await queue.removeRepeatable("watch", { every: job.intervalMinutes * 60_000 }, job.id);
-      } catch {
-        /* pattern may differ */
-      }
-      const repeatables = await queue.getRepeatableJobs();
-      const redis = getRedis();
-      for (const r of repeatables) {
-        let match = r.id === job.id || (r.key?.includes(job.id) ?? false);
-        if (!match && r.key) {
-          try {
-            const raw = await redis.hget(`bull:${WATCH_QUEUE}:repeat:${r.key}`, "data");
-            if (raw) {
-              const parsed = JSON.parse(raw) as { watchJobId?: string };
-              if (parsed.watchJobId === job.id) match = true;
-            }
-          } catch {
-            /* ignore parse/redis errors */
-          }
-        }
-        if (match) {
-          try {
-            await queue.removeRepeatableByKey(r.key);
-          } catch {
-            /* may already be gone */
-          }
-        }
-      }
-      for (const maybeId of [job.bullJobId, job.id, `${job.id}-immediate`].filter(Boolean)) {
-        try {
-          await queue.remove(String(maybeId));
-        } catch {
-          /* may already be gone */
-        }
-      }
+      const result = await removeWatchRepeatable({
+        id: job.id,
+        intervalMinutes: job.intervalMinutes,
+        endsAt: job.endsAt,
+        bullJobId: job.bullJobId,
+      });
+      request.log.info(
+        {
+          watchJobId: job.id,
+          removeRepeatableOk: result.removeRepeatableOk,
+          removedRepeatableKeys: result.removedRepeatableKeys,
+          removedJobIds: result.removedJobIds.slice(0, 20),
+        },
+        "Removed BullMQ repeatable for cancelled watch"
+      );
     } catch (err) {
       request.log.warn({ err }, "Failed to remove bull job; marking cancelled in DB");
     }

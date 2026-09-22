@@ -1112,7 +1112,7 @@ export function buildConfirmationCard(fields: IntakeFields): ConfirmationCard | 
       ? "将创建「监控盯票」任务：定时查询 12306 公开余票并通知。不含官方授权的无人值守占座/购票。"
       : fields.channel === "show"
         ? "将创建「开售/有票监控」：定时检查公开场次信息并通知；有票后请跳转大麦/猫眼等官方平台完成购买。本系统不做自动抢购/代下单。"
-        : "将创建「航班监控」：按配置数据源查询并通知；购票请跳转航司或 OTA 官方完成。本系统不做自动出票/代收票款。";
+        : "将创建「航班查询/官方跳转演示」任务。当前「实时可售票/票价监控不可用」（无 Amadeus/Aviationstack 等库存源；OpenSky ADS-B 不算可售库存）。购票请跳转航司或 OTA 官方；本系统不做自动出票/代收票款，也不会发送虚假「发现可购票」通知。";
 
   return { channel: fields.channel, channelLabel, lines, capabilityNote, fields: { ...fields } };
 }

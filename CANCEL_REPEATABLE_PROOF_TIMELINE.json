@@ -1,0 +1,80 @@
+{
+  "generatedAt": "2026-09-22T06:53:02.162Z",
+  "liveBase": "https://159.75.71.192:18444",
+  "cancelAt": "2026-09-22T06:47:04.113Z",
+  "observeAt": "2026-09-22T06:52:43.718Z",
+  "waitSeconds": 330,
+  "channels": {
+    "train": {
+      "email": "cancelproof_train_1790059609_1632330@example.com",
+      "email_fp": "317b77ee2747",
+      "token_fp": "5ba52a015d6b",
+      "requestId": "cmucb9vv50018wr35w1bmq85m",
+      "watchJobId": "cmucb9wdp001cwr35km94kz25",
+      "cancelStatus": "cancelled",
+      "workerLogMentionsAfterCancel": 0,
+      "processOrCompleteLinesAfterCancel": 0,
+      "workerLogSample": [],
+      "repeatableGone": true,
+      "db": "cancelled|Cancelled by user|2026-09-22 06:46:52.162",
+      "pass": true
+    },
+    "show": {
+      "email": "cancelproof_show_1790059612_1632330@example.com",
+      "email_fp": "268c983373d4",
+      "token_fp": "9e088ff79098",
+      "requestId": "cmucb9z6j001lwr353kxjfrmo",
+      "watchJobId": "cmucb9zpe001pwr35mca2z0x9",
+      "cancelStatus": "cancelled",
+      "workerLogMentionsAfterCancel": 0,
+      "processOrCompleteLinesAfterCancel": 0,
+      "workerLogSample": [],
+      "repeatableGone": true,
+      "db": "cancelled|Cancelled by user|2026-09-22 06:46:56.771",
+      "pass": true
+    }
+  },
+  "redisBefore": "257588a9b3fc979b70ad3a1426d963af \n606012ecfc2da57f823e1f218882e756 \n813d4d31ec5d925ad0e1d32f5c9cb1f9 \nc113f0860ba16a39e6627f614299d97b \nf4bb2608adbd4675e597f99f286bd769 \n",
+  "redisAfterImmediate": "257588a9b3fc979b70ad3a1426d963af \n606012ecfc2da57f823e1f218882e756 \nf4bb2608adbd4675e597f99f286bd769 \n",
+  "redisAfterWait": "257588a9b3fc979b70ad3a1426d963af {\"watchJobId\":\"cmuc98hv20008cdhhpojvlu9r\",\"requestId\":\"cmuc98huw0006cdhh9ohy6140\",\"userId\":\"cmuc98g7g0000cdhh1v7hn25g\"}\n606012ecfc2da57f823e1f218882e756 {\"watchJobId\":\"cmucb8i3q0008wr354p6dffnc\",\"requestId\":\"cmucb8fto0004wr35y85gkjix\",\"userId\":\"cmucb8f900000wr35mq57cgu2\"}\nf4bb2608adbd4675e597f99f286bd769 \n",
+  "labels": {
+    "cancelRepeatableProof": "pass",
+    "flightHonesty": "pass",
+    "门禁": "通过",
+    "整体": "未通过"
+  },
+  "notes": "Passwords never stored. TRAIN_REAL_SUBMIT=0. SMTP blocked.",
+  "redisInterpretation": {
+    "beforeCancel": "5 repeatable hashes present; keys 813d4d31… and c113f086… belonged to proof train/show (removed on cancel).",
+    "afterImmediate": "Those two hashes gone; only unrelated leftovers remained (later swept).",
+    "afterWait330s": "Proof watchJobIds still absent. Worker logs since cancel: 0 Processing/Completed for either id."
+  },
+  "flightHonestySpotCheck": {
+    "health": {
+      "ok": true,
+      "providerMode": "live",
+      "bookingStub": false,
+      "trainBookingDryRun": false,
+      "trainLiveQuery": true,
+      "trainRealSubmit": false,
+      "realTrainSubmit": false,
+      "flightInventoryLive": false,
+      "flightFareMonitor": false,
+      "flightProvider": "opensky",
+      "flightLabelZh": "实时可售票/票价监控不可用",
+      "flightNotes": "OpenSky Network ADS-B only (no fares, no bookable inventory). 「实时可售票/票价监控不可用」. Set Amadeus/Aviationstack keys for inventory; FLIGHT_OPENSKY=0 to disable ADS-B fallback."
+    },
+    "flightWatchDegraded": {
+      "watchJobId": "cmucb8mjx000owr35oaxe7058",
+      "status": "failed",
+      "statusReason": "degraded: 实时源暂不可用：opensky: HTTP 404",
+      "tickets_found": false,
+      "event": "watch_failed / 航班库存监控不可用"
+    }
+  },
+  "smtp": {
+    "status": "阻塞",
+    "detail": "ECONNREFUSED 127.0.0.1:587 — no credentials configured"
+  },
+  "TRAIN_REAL_SUBMIT": 0
+}

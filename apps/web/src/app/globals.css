@@ -2546,3 +2546,14 @@ body.theme-damai .flow-stepper-show .flow-step-done .flow-step-num {
   background: #fffbeb;
   border-radius: 8px;
 }
+
+.badge.unavailable,
+.badge.needs_keys,
+.badge.fixture {
+  background: #fef3c7;
+  color: #92400e;
+}
+.badge.unavailable {
+  background: #fee2e2;
+  color: #991b1b;
+}

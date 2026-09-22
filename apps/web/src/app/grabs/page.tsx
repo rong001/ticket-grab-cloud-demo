@@ -32,7 +32,7 @@ const LIVE_STATUSES = new Set(["queued", "querying", "has_tickets", "notified", 
 const CHANNEL_LABEL: Record<string, string> = {
   train: "火车 · 定时抢票",
   show: "演出 · 定时抢票/开售自动抢",
-  flight: "机票 · 定时盯票",
+  flight: "机票 · 查询/官方跳转演示（实时可售票/票价监控不可用）",
 };
 
 function countdown(iso?: string | null): string {

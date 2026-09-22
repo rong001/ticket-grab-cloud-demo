@@ -265,14 +265,53 @@ export async function processWatchJob(payload: WatchJobPayload): Promise<void> {
     },
   });
 
+  // Honesty: never treat fixture / OpenSky-fail / liveOk=false as bookable inventory success.
+  const provider = String(result.provider ?? "");
+  const inventoryUnreliable =
+    result.liveOk !== true ||
+    result.mode === "fixture" ||
+    (request.channel === "flight" &&
+      (provider === "opensky" || provider === "flight" || !provider));
+
+  if (inventoryUnreliable && request.channel === "flight") {
+    const reason =
+      result.notes ??
+      "实时可售票/票价监控不可用（OpenSky ADS-B / fixture / liveOk=false）";
+    await setWatchStatus(watch.id, "failed", `degraded: ${reason}`, { nextRunAt });
+    await prisma.notificationEvent.create({
+      data: {
+        requestId: request.id,
+        type: "watch_failed",
+        title: "航班库存监控不可用",
+        body: [
+          reason,
+          "本 tick 不发送「发现可购票」类通知。仍可使用查询/官方跳转演示。",
+          `Snapshot: ${snapshot.id}`,
+        ].join("\n"),
+        payload: {
+          snapshotId: snapshot.id,
+          liveOk: false,
+          degraded: true,
+          provider,
+          mode: result.mode,
+        } as unknown as Prisma.InputJsonValue,
+        emailed: false,
+      },
+    });
+    return;
+  }
+
   const interesting =
     diff.availabilityImproved.length > 0 ||
     diff.added.length > 0 ||
     previousItems.length === 0;
 
-  const seatsFound = result.items.some(
-    (i) => i.availability === "available" || i.availability === "limited"
-  );
+  // Never mark seatsFound when liveOk is false (any channel).
+  const seatsFound =
+    result.liveOk === true &&
+    result.items.some(
+      (i) => i.availability === "available" || i.availability === "limited"
+    );
 
   const isShow = request.channel === "show";
   const title = interesting

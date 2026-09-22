@@ -192,6 +192,12 @@ export async function buildApp() {
       trainRealSubmit: flags.trainRealSubmit,
       // Deprecated: now equals trainRealSubmit&&!bookingStub (was !bookingStub — misleading).
       realTrainSubmit: flags.realTrainSubmit,
+      // Flight honesty: OpenSky ADS-B ≠ bookable inventory / fare monitor.
+      flightInventoryLive: flags.flightInventoryLive,
+      flightFareMonitor: flags.flightFareMonitor,
+      flightProvider: flags.flightProvider,
+      flightLabelZh: flags.flightLabelZh,
+      flightNotes: flags.flightNotes,
     };
   });
 

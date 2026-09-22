@@ -27,7 +27,7 @@ export default function CapabilitiesPage() {
           <tr>
             <td>查询</td>
             <td>支持（公开接口）</td>
-            <td>调用 12306 公开余票查询。游客可走 POST /public/search，无需登录。</td>
+            <td>调用 12306 公开余票查询。游客可走 POST /api/public/search，无需登录。</td>
           </tr>
           <tr>
             <td>盯票 / 监控</td>
@@ -83,7 +83,13 @@ export default function CapabilitiesPage() {
         </tbody>
       </table>
 
-      <h2 className="section-title">机票</h2>
+      <h2 className="section-title">机票（诚实：实时可售票/票价监控不可用）</h2>
+      <div className="info-banner live-fail-banner" role="status" style={{ marginBottom: "0.75rem" }}>
+        当前生产未配置 Amadeus / Aviationstack 等授权库存/票价源。OpenSky ADS-B 仅有离港轨迹，
+        <strong>不算可售库存</strong>。健康检查字段：
+        <code>flightInventoryLive=false</code> · <code>flightFareMonitor=false</code>。
+        仅提供查询失败诚实提示 + 官方跳转演示；不会发送虚假「发现可购票」通知。
+      </div>
       <table className="cap-table">
         <thead>
           <tr>
@@ -95,8 +101,21 @@ export default function CapabilitiesPage() {
         <tbody>
           <tr>
             <td>查询</td>
-            <td>视 API 配置</td>
-            <td>Amadeus / Aviationstack / OpenSky 等；未配置时明确非实时，不伪造可售价。</td>
+            <td>演示 / 官方跳转</td>
+            <td>
+              无库存 Key 时 <code>liveOk=false</code>、<code>mode=fixture</code>、items 可为空；
+              UI 标注「实时可售票/票价监控不可用」，不绿标「实时可售」。
+            </td>
+          </tr>
+          <tr>
+            <td>票价 / 可售监控</td>
+            <td>
+              <strong>不可用</strong>
+            </td>
+            <td>
+              需正式接入 Amadeus / Aviationstack / 航司官方 API 后才开启。见仓库
+              <code>FLIGHT_SOURCE_ROADMAP.md</code>。
+            </td>
           </tr>
           <tr>
             <td>下单 / 支付</td>
@@ -110,7 +129,8 @@ export default function CapabilitiesPage() {
       <p>
         仅表示搜索适配器尝试访问上游公开数据源。它不表示本站已获得自动购票、批量占座或第三方售票授权。
         协助下单另需显式开启 <code>TRAIN_REAL_SUBMIT=1</code>（默认关闭）；未开启时 <code>/health.trainRealSubmit=false</code>，提交接口返回禁用。
-        任何「一键抢到」的宣传都不适用于本站。
+        任何「一键抢到」的宣传都不适用于本站。机票通道即使 PROVIDER_MODE=live，在无库存 Key 时仍为
+        <code>flightInventoryLive=false</code>。
       </p>
 
       <p>
@@ -127,6 +147,7 @@ export default function CapabilitiesPage() {
         <li><strong>监控（盯票）</strong>：定时刷新并通知；不锁票。</li>
         <li><strong>官方跳转</strong>：登录与支付在 12306 / 大麦 / 航司等官方完成。</li>
         <li><strong>授权自动占座/购票</strong>：仅在取得平台正式授权后才会提供；当前版本<strong>未获授权</strong>，不得宣传无人值守自动购票。</li>
+        <li><strong>机票库存监控</strong>：当前<strong>诚实不可用</strong>（见上）。</li>
       </ul>
 </div>
   );

@@ -859,7 +859,8 @@ export default function NewRequestPage() {
             <>
               <FlowStepper steps={FLIGHT_FLOW_STEPS} current="query" variant="flight" />
               <p className="show-hint">
-                航班实时依赖 Amadeus / Aviationstack 等公开 API；未配置时不会展示虚假可售票价。支付在航司/OTA 官方完成。
+                <strong>实时可售票/票价监控不可用</strong>（无 Amadeus/Aviationstack 库存 Key 时）。
+                OpenSky ADS-B 不算可售。未配置时不展示虚假可售票价、不绿标「实时」。支付在航司/OTA 官方完成。
               </p>
               <div className="row">
                 <SearchableSelect
@@ -966,8 +967,25 @@ export default function NewRequestPage() {
         <div className="card stack" style={{ marginTop: "1.25rem" }}>
           <h2 className="section-title">
             查询结果
-            <span className={`badge ${publicMeta.liveOk ? "available" : "limited"}`} style={{ marginLeft: 8 }}>
-              {publicMeta.liveOk ? "实时" : "非实时/回退"}
+            <span
+              className={`badge ${
+                channel === "flight"
+                  ? publicMeta.liveOk
+                    ? "available"
+                    : "sold_out"
+                  : publicMeta.liveOk
+                    ? "available"
+                    : "limited"
+              }`}
+              style={{ marginLeft: 8 }}
+            >
+              {channel === "flight"
+                ? publicMeta.liveOk
+                  ? "实时可售"
+                  : "实时可售票/票价监控不可用"
+                : publicMeta.liveOk
+                  ? "实时"
+                  : "非实时/回退"}
             </span>
           </h2>
           <p className="meta">
@@ -979,7 +997,9 @@ export default function NewRequestPage() {
           {publicMeta.notes && <p className="info-banner">{publicMeta.notes}</p>}
           {!publicMeta.liveOk && (
             <p className="info-banner live-fail-banner" role="status">
-              当前非实时库存（fixture 或上游回退）。PROVIDER_MODE=live 也不等于已获官方代售授权。
+              {channel === "flight"
+                ? "机票「实时可售票/票价监控不可用」：OpenSky ADS-B / fixture 不算可售库存。仅查询与官方跳转演示；不会绿标为实时可售。"
+                : "当前非实时库存（fixture 或上游回退）。PROVIDER_MODE=live 也不等于已获官方代售授权。"}
             </p>
           )}
 

@@ -1,10 +1,10 @@
 # Watch-tick acceptance (≥5 min) — ticket-grab-cloud
 
 **Measured (UTC):** 2026-09-22T06:23:52Z → 2026-09-22T06:31:15Z  
+**Private SHA:** `26be33d81cd4db54515a987e0fd38e25f0f6c664`  
 **Live:** https://159.75.71.192:18444  
 **API:** https://159.75.71.192:18444/api  
 **Public repo:** https://github.com/rong001/ticket-grab-cloud-demo  
-**Public SHA:** `1702a1106bdd617390030788bf89d008447fd090` ([1702a11](https://github.com/rong001/ticket-grab-cloud-demo/commit/1702a1106bdd617390030788bf89d008447fd090))  
 
 Synthetic accounts self-registered via `POST /api/auth/register`. Passwords **never** stored or printed. Tokens only fingerprinted.
 
@@ -15,8 +15,9 @@ Synthetic accounts self-registered via `POST /api/auth/register`. Passwords **ne
 | **门禁 / submit-gate** | **通过** |
 | **本 tick 项 (train)** | **pass** — live 12306 query + notify + cancel |
 | **本 tick 项 (show)** | **pass** — live Dianping/Gewara myshow + notify + cancel |
-| **本 tick 项 (flight)** | **partial** — tick/cancel machinery **pass**; OpenSky live query **FAIL** (`HTTP 404` → fixture fallback, `liveOk=false`, 0 items). Documented honestly — not faked. |
-| **整体产品 / 端到端独立验收** | **待独立验收** — do **not** claim overall product PASS |
+| **本 tick 项 (flight)** | **诚实不可用 (pass honesty)** — `flightInventoryLive=false` / `flightFareMonitor=false`; OpenSky ≠ inventory; watch ticks emit `watch_failed` degraded — **never** `tickets_found`. See FLIGHT_SOURCE_ROADMAP.md |
+| **Cancel repeatable (BullMQ)** | **pass** — re-proved 2026-09-22 with NEW synthetic train+show; ≥5m window; see CANCEL_REPEATABLE_PROOF.md |
+| **整体产品 / 端到端独立验收** | **未通过** — do **not** claim overall product PASS |
 
 Capability boundary: **monitor + notify + official redirect / handoff only**. No 无人值守购票. `TRAIN_REAL_SUBMIT=0` confirmed on live health (`trainRealSubmit:false`).
 
@@ -88,8 +89,8 @@ There is **no separate pause API** in this build; **cancel** is the lifecycle st
 | `watch_cancelled` NotificationEvent | **PASS** |
 | Second observation (~45s) `lastRunAt` unchanged | **PASS** |
 | Full ≥5m `nextRunAt` window observe @ **06:31:15Z** — `lastRunAt` / `updatedAt` still frozen | **PASS** (product: no further ticks) |
-| BullMQ repeatable absence **at test time** | **FAIL / partial** — cancel matcher only checked `r.id` / `key.includes(cuid)`; BullMQ keys are content hashes, so orphan `every=300000` repeats remained and worker still **dequeued** them. Processor early-returns on `cancelled` → **no** `lastRunAt` update / no upstream re-query. |
-| Operator cleanup of the 3 orphan hashes + **cancel matcher fix** deployed to live API | Done after measurement (see timeline JSON). Retests should see BullMQ absence. |
+| BullMQ repeatable absence (original tick run) | Was **FAIL / partial** (hash keys). |
+| **Re-proof after cancel fix (NEW jobs, ≥5m)** | **PASS** — see [`CANCEL_REPEATABLE_PROOF.md`](./CANCEL_REPEATABLE_PROOF.md) + timeline JSON. |
 
 ---
 

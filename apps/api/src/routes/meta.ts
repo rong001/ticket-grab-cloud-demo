@@ -29,11 +29,17 @@ export async function metaRoutes(app: FastifyInstance) {
           ? false
           : env.providerMode === "fixture" || process.env.BOOKING_STUB === "1",
     });
+    const flight = sources.find((c) => c.channel === "flight");
     return {
       providerMode: env.providerMode,
       queriedAt: new Date().toISOString(),
       channels: sources,
       strictLive: process.env.STRICT_LIVE === "1" || process.env.STRICT_LIVE === "true",
+      // Top-level honesty aliases for UI / ops (also on each channel row).
+      flightInventoryLive: flight?.inventoryLive === true,
+      flightFareMonitor: flight?.fareMonitor === true,
+      flightLabelZh: flight?.labelZh ?? "实时可售票/票价监控不可用",
+      flightNotes: flight?.notes ?? null,
     };
   });
 

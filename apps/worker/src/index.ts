@@ -30,8 +30,18 @@ async function rehydrateWatchJobs() {
     const intervalMs = Math.max(1, job.intervalMinutes) * 60_000;
     try {
       const repeatables = await queue.getRepeatableJobs();
+      const redis = connection;
       for (const r of repeatables) {
-        if (r.id === job.id || r.key?.includes(job.id)) {
+        let match = r.id === job.id || (r.key?.includes(job.id) ?? false);
+        if (!match && r.key) {
+          try {
+            const raw = await redis.hget(`bull:${QUEUE_NAME}:repeat:${r.key}`, "data");
+            if (raw && JSON.parse(raw).watchJobId === job.id) match = true;
+          } catch {
+            /* ignore */
+          }
+        }
+        if (match && r.key) {
           await queue.removeRepeatableByKey(r.key);
         }
       }
