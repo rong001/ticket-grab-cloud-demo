@@ -41,4 +41,16 @@ Last local run: **29 pass / 0 fail** (unit+smoke) + **4 pass** orderGate.
 | show | 观演人绑定→草稿；提交 403 `SHOW_AUTO_BUY_UNAVAILABLE`；票档精确 token（380≠1380） | 大麦/猫眼真实下单 API | 接入官方购票 API；用户登录官方完成支付 |
 | flight | 乘机人绑定→草稿（scheduleOnly 仅参考）；提交 403 `FLIGHT_INVENTORY_UNAVAILABLE` | 授权运价/库存 API（Amadeus 等） | 配置运价密钥；勿把 OpenSky/Aviationstack 当可售 |
 
+## Commit SHAs
+
+- Private: `2b1ebafd11b33b89dc807fc12c734af616a7ef77` — https://github.com/rong001/ticket-grab-cloud/commit/2b1ebafd11b33b89dc807fc12c734af616a7ef77
+- Public demo: `383d1ff92954ac4c3a31db29bf51e31aa4a1636c` — https://github.com/rong001/ticket-grab-cloud-demo/commit/383d1ff92954ac4c3a31db29bf51e31aa4a1636c
+
+## Live evidence (API)
+
+- `GET /api/health` → `ok=true`, `trainRealSubmit=false`
+- Host `.env.production` still `TRAIN_REAL_SUBMIT=0`
+- Migration `20260922180000_order_draft_fingerprint` applied (`Order.draftFingerprint` present)
+- Commerce :80/:443 untouched this round
+
 ## Overall: **未通过**
